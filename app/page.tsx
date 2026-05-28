@@ -21,9 +21,28 @@ async function normalizeFile(f: File): Promise<File> {
     f.name.toLowerCase().endsWith(".heif");
 
   if (isHeic) {
-    const heic2any = (await import("heic2any")).default;
-    const blob = await heic2any({ blob: f, toType: "image/jpeg", quality: 0.95 }) as Blob;
-    return new File([blob], f.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(f);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas failed")); return; }
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error("Conversion failed")); return; }
+          resolve(new File([blob], f.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" }));
+        }, "image/jpeg", 0.95);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Browser cannot decode this HEIC file"));
+      };
+      img.src = url;
+    });
   }
   return f;
 }
