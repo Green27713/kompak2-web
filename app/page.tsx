@@ -10,8 +10,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 
-const ACCEPTED = "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm";
+const ACCEPTED = "image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm";
 const MAX_MB = 500;
+
+async function normalizeFile(f: File): Promise<File> {
+  const isHeic =
+    f.type === "image/heic" ||
+    f.type === "image/heif" ||
+    f.name.toLowerCase().endsWith(".heic") ||
+    f.name.toLowerCase().endsWith(".heif");
+
+  if (isHeic) {
+    const heic2any = (await import("heic2any")).default;
+    const blob = await heic2any({ blob: f, toType: "image/jpeg", quality: 0.95 }) as Blob;
+    return new File([blob], f.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+  }
+  return f;
+}
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -20,13 +35,20 @@ export default function Home() {
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [emailSubmitted, setEmailSubmitted] = useState(false);
+  const [converting, setConverting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { state, compress, reset } = useCompression();
 
-  function pickFile(f: File) {
+  async function pickFile(f: File) {
+    const isHeic =
+      f.type === "image/heic" ||
+      f.type === "image/heif" ||
+      f.name.toLowerCase().endsWith(".heic") ||
+      f.name.toLowerCase().endsWith(".heif");
+
     const category = getFileCategory(f);
-    if (!category) {
-      toast.error("Unsupported file type. Use JPEG, PNG, WebP, MP4, MOV, or WebM.");
+    if (!category && !isHeic) {
+      toast.error("Unsupported file type. Use JPEG, PNG, WebP, HEIC, MP4, MOV, or WebM.");
       return;
     }
     const sizeMB = f.size / (1024 * 1024);
@@ -34,7 +56,21 @@ export default function Home() {
       toast.error(`File too large (${sizeMB.toFixed(0)} MB). Max is ${MAX_MB} MB.`);
       return;
     }
-    setFile(f);
+
+    if (isHeic) {
+      setConverting(true);
+      try {
+        const converted = await normalizeFile(f);
+        setFile(converted);
+        toast.success("HEIC converted to JPEG");
+      } catch {
+        toast.error("Failed to convert HEIC file.");
+      } finally {
+        setConverting(false);
+      }
+    } else {
+      setFile(f);
+    }
     reset();
   }
 
@@ -71,6 +107,7 @@ export default function Home() {
   const isCompressing = state.status === "compressing";
   const isDone = state.status === "done";
   const category = file ? getFileCategory(file) : null;
+  const isPng = file?.type === "image/png";
 
   return (
     <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
@@ -85,7 +122,7 @@ export default function Home() {
       </div>
 
       {/* Screen 1 — Drop Zone */}
-      {!file && (
+      {!file && !converting && (
         <div
           className={`w-full max-w-xl border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-colors ${
             dragging
@@ -109,28 +146,66 @@ export default function Home() {
             {dragging ? "Drop it here" : "Drop a file or click to browse"}
           </p>
           <p className="text-zinc-500 text-sm">
-            JPEG · PNG · WebP · MP4 · MOV · WebM · max {MAX_MB} MB
+            JPEG · PNG · WebP · HEIC · MP4 · MOV · WebM · max {MAX_MB} MB
           </p>
         </div>
       )}
 
+      {/* HEIC converting state */}
+      {converting && (
+        <div className="w-full max-w-xl text-center py-16">
+          <div className="text-4xl mb-4">⚙️</div>
+          <p className="text-zinc-300">Converting HEIC to JPEG…</p>
+        </div>
+      )}
+
       {/* Screen 2 — Compression Panel */}
-      {file && (
+      {file && !converting && (
         <div className="w-full max-w-xl space-y-6">
 
           {/* File info */}
           <div className="flex items-center justify-between bg-zinc-900 rounded-xl p-4">
             <div>
               <p className="font-medium truncate max-w-xs">{file.name}</p>
-              <p className="text-zinc-400 text-sm">{state.originalSizeFormatted}</p>
+              <p className="text-zinc-400 text-sm">{state.originalSizeFormatted || `${(file.size / (1024 * 1024)).toFixed(2)} MB`}</p>
             </div>
             <Badge variant="outline" className="text-zinc-300 border-zinc-600">
               {category}
             </Badge>
           </div>
 
-          {/* Quality slider */}
-          {!isDone && (
+          {/* Quality slider — images only, not PNG */}
+          {!isDone && category === "image" && !isPng && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-zinc-400">
+                <span>Quality</span>
+                <span>{quality}%</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={quality}
+                onChange={(e) => setQuality(Number(e.target.value))}
+                disabled={isCompressing}
+                className="w-full accent-white"
+              />
+              <div className="flex justify-between text-xs text-zinc-600">
+                <span>Smaller file</span>
+                <span>Better quality</span>
+              </div>
+            </div>
+          )}
+
+          {/* PNG notice */}
+          {!isDone && isPng && (
+            <p className="text-zinc-500 text-sm text-center">
+              PNG will be converted to WebP for maximum compression
+            </p>
+          )}
+
+          {/* Video quality slider */}
+          {!isDone && category === "video" && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm text-zinc-400">
                 <span>Quality</span>
@@ -185,7 +260,7 @@ export default function Home() {
               variant="outline"
               onClick={handleReset}
               disabled={isCompressing}
-              className="flex-1 border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              className="flex-1 border-zinc-600 bg-zinc-800 text-white hover:bg-zinc-700 hover:text-white"
             >
               New File
             </Button>
@@ -246,14 +321,14 @@ export default function Home() {
                 onClick={handleWaitlistSubmit}
                 className="w-full bg-white text-black hover:bg-zinc-200"
               >
-                I'm in
+                I&apos;m in
               </Button>
             </div>
           ) : (
             <div className="text-center py-4 space-y-2">
               <p className="text-2xl">✅</p>
-              <p className="font-medium">You're on the list.</p>
-              <p className="text-zinc-400 text-sm">We'll reach out when API access opens.</p>
+              <p className="font-medium">You&apos;re on the list.</p>
+              <p className="text-zinc-400 text-sm">We&apos;ll reach out when API access opens.</p>
             </div>
           )}
         </DialogContent>

@@ -7,7 +7,7 @@ export interface CompressedImageResult {
 }
 
 export interface ImageCompressionOptions {
-  quality: number; // 1-100
+  quality: number;
 }
 
 export function compressImage(
@@ -33,7 +33,10 @@ export function compressImage(
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
 
-      const mimeType = file.type === "image/png" ? "image/png" : "image/jpeg";
+      // PNG → WebP for real compression gains
+      // JPEG stays as JPEG
+      const isPng = file.type === "image/png";
+      const mimeType = isPng ? "image/webp" : "image/jpeg";
       const q = options.quality / 100;
       const dataUrl = canvas.toDataURL(mimeType, q);
       const base64 = dataUrl.split(",")[1];
