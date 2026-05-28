@@ -89,7 +89,8 @@ export async function compressVideo(
 
     const data = await ff.readFile(outputName);
     const mimeType = outputFormat === "webm" ? "video/webm" : "video/mp4";
-    const blob = new Blob([data.buffer as ArrayBuffer], { type: mimeType });
+    const uint8 = data instanceof Uint8Array ? data : new Uint8Array(data as unknown as ArrayBuffer);
+    const blob = new Blob([new Uint8Array(uint8.buffer as ArrayBuffer)], { type: mimeType });
 
     return {
       url: URL.createObjectURL(blob),

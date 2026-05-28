@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useCompression } from "@/src/hooks/useCompression";
-import { getFileCategory } from "@/src/services/compression/index";
+import { useCompression } from "../src/hooks/useCompression";
+import { getFileCategory } from "../src/services/compression/index";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";

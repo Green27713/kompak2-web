@@ -1,12 +1,12 @@
 import { useState, useCallback } from "react";
-import { compressImage } from "@/src/services/compression/compressImage";
-import { compressVideo } from "@/src/services/compression/compressVideo";
+import { compressImage } from "../services/compression/compressImage";
+import { compressVideo } from "../services/compression/compressVideo";
 import {
   formatBytes,
   calculateSavings,
   getFileCategory,
   getOutputFilename,
-} from "@/src/services/compression/index";
+} from "../services/compression/index";
 
 export type CompressionStatus = "idle" | "compressing" | "done" | "error";
 
@@ -60,14 +60,12 @@ export function useCompression() {
 
       if (category === "image") {
         const result = await compressImage(file, { quality });
-        // Convert dataUrl to blob URL for consistency
         const res = await fetch(result.dataUrl);
         const blob = await res.blob();
         outputUrl = URL.createObjectURL(blob);
         sizeBytes = result.sizeBytes;
         format = result.format;
       } else {
-        // Map quality 1-100 to CRF 51-0 (inverse — higher quality = lower CRF)
         const crf = Math.round(51 - (quality / 100) * 51);
         const result = await compressVideo(file, {
           crf,
