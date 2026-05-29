@@ -121,7 +121,7 @@ export default function Home() {
     const sizeMB = f.size / (1024 * 1024);
     if (sizeMB > MAX_MB) { toast.error(`File too large. Max is ${MAX_MB} MB.`); return; }
     if (category === "video" && sizeMB > VIDEO_WARNING_MB) {
-      toast(`Large video detected (${sizeMB.toFixed(0)} MB). Browser compression runs in real-time — this may take ${Math.round(sizeMB / 3)} minutes. Server-side compression coming soon.`, { duration: 8000, icon: "⏱" });
+      toast.warning(`Large video detected (${sizeMB.toFixed(0)} MB). Browser compression runs in real-time — this may take ${Math.round(sizeMB / 3)} minutes. Server-side compression coming soon.`, { duration: 8000, icon: "⏱" });
     }
 
     // Store original preview for before/after
@@ -474,7 +474,7 @@ export default function Home() {
             Built by a Navy veteran in Patong, Thailand
           </h2>
           <p style={{ fontSize: "14px", color: "#8C8580", lineHeight: "1.8", marginBottom: "24px" }}>
-            After 30 years in US Navy aviation — logistics, procurement, inspection — I started building digital tools that work the way operations should: simple on the outside, solid on the inside. PixSnug™ is one of them.
+          After 30 years in US Navy aviation as an Aviation Maintenance Officer — responsible for naval aviation readiness, logistics, and airworthiness — I started building digital tools that work the way operations should: simple on the outside, solid on the inside. PixSnug™ is one of them.
           </p>
           <a href="https://ko-fi.com/pixsnug" target="_blank" rel="noopener noreferrer" style={{
             display: "inline-flex", alignItems: "center", gap: "8px",
