@@ -12,13 +12,61 @@ export interface ImageCompressionOptions {
 }
 
 const API_SIZE_LIMIT = 4 * 1024 * 1024; // 4MB
+const MAX_DIMENSION = 2400; // max width or height before resize
+
+async function resizeIfNeeded(file: File): Promise<File> {
+  if (file.size <= API_SIZE_LIMIT) return file;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      const { naturalWidth: w, naturalHeight: h } = img;
+
+      // Calculate new dimensions maintaining aspect ratio
+      let newW = w;
+      let newH = h;
+      if (w > h && w > MAX_DIMENSION) {
+        newW = MAX_DIMENSION;
+        newH = Math.round(h * (MAX_DIMENSION / w));
+      } else if (h > w && h > MAX_DIMENSION) {
+        newH = MAX_DIMENSION;
+        newW = Math.round(w * (MAX_DIMENSION / h));
+      } else if (w === h && w > MAX_DIMENSION) {
+        newW = MAX_DIMENSION;
+        newH = MAX_DIMENSION;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = newW;
+      canvas.height = newH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error("Canvas failed")); return; }
+
+      ctx.drawImage(img, 0, 0, newW, newH);
+      URL.revokeObjectURL(url);
+
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error("Resize failed")); return; }
+        resolve(new File([blob], file.name, { type: "image/jpeg" }));
+      }, "image/jpeg", 0.92);
+    };
+
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Failed to load image")); };
+    img.src = url;
+  });
+}
 
 async function compressViaAPI(
   file: File,
   quality: number
 ): Promise<CompressedImageResult> {
+  // Resize large files before sending to API
+  const fileToSend = await resizeIfNeeded(file);
+
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("file", fileToSend);
   formData.append("quality", String(quality));
 
   const res = await fetch("/api/compress", {
@@ -113,15 +161,11 @@ export async function compressImage(
   file: File,
   options: ImageCompressionOptions
 ): Promise<CompressedImageResult> {
-  // Use server-side Sharp for files under 4MB — far better compression
-  if (file.size <= API_SIZE_LIMIT) {
-    try {
-      return await compressViaAPI(file, options.quality);
-    } catch {
-      // Fall back to browser if API fails
-      console.warn("API compression failed, falling back to browser");
-    }
+  // Always try API first — resize handles large files automatically
+  try {
+    return await compressViaAPI(file, options.quality);
+  } catch {
+    console.warn("API compression failed, falling back to browser");
+    return await compressViaBrowser(file, options.quality);
   }
-  // Browser fallback for large files
-  return await compressViaBrowser(file, options.quality);
 }
