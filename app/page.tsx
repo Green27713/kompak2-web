@@ -130,8 +130,12 @@ export default function Home() {
     toast.success("Downloaded");
   }
 
-  function handleWaitlistSubmit() {
+  async function handleWaitlistSubmit() {
     if (!email.includes("@")) { toast.error("Please enter a valid email."); return; }
+    try {
+      const res = await fetch("/api/waitlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      if (!res.ok) throw new Error();
+    } catch { toast.error("Something went wrong. Try again."); return; }
     setEmailSubmitted(true); toast.success("You're on the list");
   }
 
