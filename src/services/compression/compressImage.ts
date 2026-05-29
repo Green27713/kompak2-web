@@ -33,14 +33,28 @@ export function compressImage(
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
 
-      // PNG → WebP for real compression gains
-      // JPEG stays as JPEG
-      const isPng = file.type === "image/png";
-      const mimeType = isPng ? "image/webp" : "image/jpeg";
+      // Always output WebP — smaller than JPEG/PNG at equivalent quality
+      const mimeType = "image/webp";
       const q = options.quality / 100;
       const dataUrl = canvas.toDataURL(mimeType, q);
       const base64 = dataUrl.split(",")[1];
       const sizeBytes = Math.round((base64.length * 3) / 4);
+
+      // If WebP is larger than original, try lower quality
+      if (sizeBytes >= file.size && options.quality > 60) {
+        const fallbackQ = 0.5;
+        const fallbackDataUrl = canvas.toDataURL(mimeType, fallbackQ);
+        const fallbackBase64 = fallbackDataUrl.split(",")[1];
+        const fallbackSize = Math.round((fallbackBase64.length * 3) / 4);
+        resolve({
+          dataUrl: fallbackDataUrl,
+          sizeBytes: fallbackSize,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          format: mimeType,
+        });
+        return;
+      }
 
       resolve({
         dataUrl,
