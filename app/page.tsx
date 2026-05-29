@@ -138,7 +138,8 @@ export default function Home() {
   function handleReset() { setFile(null); reset(); }
 
   const isCompressing = state.status === "compressing";
-  const isDone = state.status === "done";
+  const isOptimized = (state.status as string) === "optimized";
+  const isDone = state.status === "done" || (state.status as string) === "optimized";
   const category = file ? getFileCategory(file) : null;
   const isPng = file?.type === "image/png";
 

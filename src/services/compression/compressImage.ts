@@ -4,6 +4,7 @@ export interface CompressedImageResult {
   width: number;
   height: number;
   format: string;
+  alreadyOptimized?: boolean;
 }
 
 export interface ImageCompressionOptions {
@@ -22,64 +23,44 @@ export function compressImage(
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
-
       const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        URL.revokeObjectURL(url);
-        reject(new Error("Could not get canvas context"));
-        return;
-      }
-
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error("Could not get canvas context")); return; }
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
 
-      // Map user quality 1-100 to WebP quality 0.1-0.85
-      // Cap at 0.85 — above this WebP bloats vs original
-      const mappedQ = 0.1 + (options.quality / 100) * 0.75;
       const mimeType = "image/webp";
+      let lo = 0.05, hi = 0.90;
+      let bestDataUrl = "";
+      let bestSize = file.size;
+      let found = false;
 
-      const dataUrl = canvas.toDataURL(mimeType, mappedQ);
-      const base64 = dataUrl.split(",")[1];
-      const sizeBytes = Math.round((base64.length * 3) / 4);
+      for (let i = 0; i < 8; i++) {
+        const mid = (lo + hi) / 2;
+        const attempt = canvas.toDataURL(mimeType, mid);
+        const attemptSize = Math.round((attempt.split(",")[1].length * 3) / 4);
+        if (attemptSize < file.size) {
+          bestDataUrl = attempt; bestSize = attemptSize; found = true; lo = mid;
+        } else { hi = mid; }
+      }
 
-      // If still larger than original, force quality down until smaller
-      if (sizeBytes >= file.size) {
-        let q = 0.4;
-        let result = canvas.toDataURL(mimeType, q);
-        let resultBase64 = result.split(",")[1];
-        let resultSize = Math.round((resultBase64.length * 3) / 4);
-
-        while (resultSize >= file.size && q > 0.1) {
-          q -= 0.05;
-          result = canvas.toDataURL(mimeType, q);
-          resultBase64 = result.split(",")[1];
-          resultSize = Math.round((resultBase64.length * 3) / 4);
-        }
-
-        resolve({
-          dataUrl: result,
-          sizeBytes: resultSize,
+      if (!found) {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve({
+          dataUrl: e.target?.result as string,
+          sizeBytes: file.size,
           width: img.naturalWidth,
           height: img.naturalHeight,
-          format: mimeType,
+          format: file.type,
+          alreadyOptimized: true,
         });
+        reader.readAsDataURL(file);
         return;
       }
 
-      resolve({
-        dataUrl,
-        sizeBytes,
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-        format: mimeType,
-      });
+      resolve({ dataUrl: bestDataUrl, sizeBytes: bestSize, width: img.naturalWidth, height: img.naturalHeight, format: mimeType, alreadyOptimized: false });
     };
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Failed to load image"));
-    };
-
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Failed to load image")); };
     img.src = url;
   });
 }
