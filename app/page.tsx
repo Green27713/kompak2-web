@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 const ACCEPTED = "image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm";
 const MAX_MB = 500;
+const VIDEO_WARNING_MB = 50;
 
 async function normalizeFile(f: File): Promise<File> {
   const isHeic = f.type === "image/heic" || f.type === "image/heif" ||
@@ -119,6 +120,9 @@ export default function Home() {
     if (!category && !isHeic) { toast.error("Unsupported file type."); return; }
     const sizeMB = f.size / (1024 * 1024);
     if (sizeMB > MAX_MB) { toast.error(`File too large. Max is ${MAX_MB} MB.`); return; }
+    if (category === "video" && sizeMB > VIDEO_WARNING_MB) {
+      toast(`Large video detected (${sizeMB.toFixed(0)} MB). Browser compression runs in real-time — this may take ${Math.round(sizeMB / 3)} minutes. Server-side compression coming soon.`, { duration: 8000, icon: "⏱" });
+    }
 
     // Store original preview for before/after
     const previewUrl = URL.createObjectURL(f);
@@ -444,6 +448,7 @@ export default function Home() {
               { format: "HEIC", desc: "iPhone photos converted and compressed automatically. Works in Safari.", badge: "iPhone" },
               { format: "MP4", desc: "FFmpeg WASM compression. Reduce video file size without re-uploading anywhere.", badge: "Video" },
               { format: "PDF", desc: "Server-side PDF compression coming soon. Join the waitlist for early access.", badge: "Coming soon", soon: true },
+              { format: "Fast Video", desc: "Server-side video compression — 300MB in under 60 seconds instead of minutes. Coming soon.", badge: "Coming soon", soon: true },
             ].map((item) => (
               <div key={item.format} style={{ textAlign: "left", padding: "20px 24px", backgroundColor: item.soon ? "#FAF8F5" : "#F5F2EE", borderRadius: "14px", border: `1px solid ${item.soon ? "#EDE9E4" : "#E2DDD6"}`, opacity: item.soon ? 0.6 : 1 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
