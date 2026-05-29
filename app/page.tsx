@@ -134,9 +134,9 @@ export default function Home() {
 
       {/* Header */}
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold tracking-tight mb-2">Kompak2</h1>
+        <h1 className="text-4xl font-bold tracking-tight mb-2">Pixsnug</h1>
         <p className="text-zinc-400 text-sm">
-          Compress images & videos — free, private, runs in your browser
+          Squeeze your images & videos tiny — free, private, instant
         </p>
       </div>
 
