@@ -33,22 +33,32 @@ export function compressImage(
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
 
-      // Always output WebP — smaller than JPEG/PNG at equivalent quality
+      // Map user quality 1-100 to WebP quality 0.1-0.85
+      // Cap at 0.85 — above this WebP bloats vs original
+      const mappedQ = 0.1 + (options.quality / 100) * 0.75;
       const mimeType = "image/webp";
-      const q = options.quality / 100;
-      const dataUrl = canvas.toDataURL(mimeType, q);
+
+      const dataUrl = canvas.toDataURL(mimeType, mappedQ);
       const base64 = dataUrl.split(",")[1];
       const sizeBytes = Math.round((base64.length * 3) / 4);
 
-      // If WebP is larger than original, try lower quality
-      if (sizeBytes >= file.size && options.quality > 60) {
-        const fallbackQ = 0.5;
-        const fallbackDataUrl = canvas.toDataURL(mimeType, fallbackQ);
-        const fallbackBase64 = fallbackDataUrl.split(",")[1];
-        const fallbackSize = Math.round((fallbackBase64.length * 3) / 4);
+      // If still larger than original, force quality down until smaller
+      if (sizeBytes >= file.size) {
+        let q = 0.4;
+        let result = canvas.toDataURL(mimeType, q);
+        let resultBase64 = result.split(",")[1];
+        let resultSize = Math.round((resultBase64.length * 3) / 4);
+
+        while (resultSize >= file.size && q > 0.1) {
+          q -= 0.05;
+          result = canvas.toDataURL(mimeType, q);
+          resultBase64 = result.split(",")[1];
+          resultSize = Math.round((resultBase64.length * 3) / 4);
+        }
+
         resolve({
-          dataUrl: fallbackDataUrl,
-          sizeBytes: fallbackSize,
+          dataUrl: result,
+          sizeBytes: resultSize,
           width: img.naturalWidth,
           height: img.naturalHeight,
           format: mimeType,
