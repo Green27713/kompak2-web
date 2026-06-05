@@ -133,6 +133,9 @@ export async function POST(req: NextRequest) {
     const outputExt = useWebM ? 'webm' : 'mp4';
     const outputPath = `/tmp/${fileId}-compressed.${outputExt}`;
 
+    let inputDeleted = false;
+    let outputStreaming = false;
+
     try {
       await writeFile(tempPath, Buffer.from(await file.arrayBuffer()));
 
@@ -142,27 +145,39 @@ export async function POST(req: NextRequest) {
 
       await execAsync(ffmpegCmd);
 
-      const { readFile } = await import('fs/promises');
-      const compressedBuffer = await readFile(outputPath);
+      // Input no longer needed — free disk space before streaming response
+      try { await unlink(tempPath); inputDeleted = true; } catch {}
+
+      const { stat } = await import('fs/promises');
+      const { createReadStream } = await import('fs');
+      const { Readable } = await import('stream');
+
+      const fileStat = await stat(outputPath);
+      const outputSize = fileStat.size;
       const originalSize = file.size;
-      const compressedSize = compressedBuffer.length;
-      const savings = Math.round((1 - compressedSize / originalSize) * 100);
+      const savings = Math.max(0, Math.round((1 - outputSize / originalSize) * 100));
       const outputMime = useWebM ? 'video/webm' : 'video/mp4';
       const outName = file.name.replace(/\.[^.]+$/, '') + `-compressed.${outputExt}`;
 
-      return new NextResponse(compressedBuffer, {
+      // Stream directly from disk — avoids loading the whole file into RAM
+      const nodeStream = createReadStream(outputPath);
+      nodeStream.on('close', async () => { try { await unlink(outputPath); } catch {} });
+
+      outputStreaming = true;
+      return new NextResponse(Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>, {
         headers: {
           'Content-Type': outputMime,
           'Content-Disposition': `attachment; filename="${outName}"`,
+          'Content-Length': String(outputSize),
           'X-Original-Size': String(originalSize),
-          'X-Compressed-Size': String(compressedSize),
+          'X-Compressed-Size': String(outputSize),
           'X-Savings': String(savings),
           'Cache-Control': 'no-store',
         },
       });
     } finally {
-      try { await unlink(tempPath); } catch {}
-      try { await unlink(outputPath); } catch {}
+      if (!inputDeleted)   { try { await unlink(tempPath); }  catch {} }
+      if (!outputStreaming) { try { await unlink(outputPath); } catch {} }
     }
 
   } catch (err) {

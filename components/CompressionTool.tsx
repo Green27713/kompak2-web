@@ -61,6 +61,7 @@ function xhrUpload(
   formData: FormData,
   signal: AbortSignal,
   onUploadProgress: (pct: number) => void,
+  onUploadComplete?: () => void,
 ): Promise<{ blob: Blob; origSize: number; compSize: number }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -69,6 +70,7 @@ function xhrUpload(
     xhr.upload.addEventListener('progress', e => {
       if (e.lengthComputable) onUploadProgress(Math.round((e.loaded / e.total) * 75));
     });
+    xhr.upload.addEventListener('load', () => onUploadComplete?.());
     xhr.addEventListener('load', () => {
       if (xhr.status !== 200) {
         try { const b = JSON.parse(xhr.responseText); reject(new Error(b.error || `Server error ${xhr.status}`)); }
@@ -210,7 +212,8 @@ export default function CompressionTool() {
 
         const { blob, origSize, compSize } = await xhrUpload(
           formData, controller.signal,
-          pct => { setPhase('upload'); setUploadPct(pct); }
+          pct => { setPhase('upload'); setUploadPct(pct); },
+          () => { setPhase('process'); setUploadPct(100); }
         );
 
         setPhase('process'); setUploadPct(90);
@@ -396,16 +399,16 @@ export default function CompressionTool() {
           <div style={{ width: '100%', height: 8, backgroundColor: C.gray200, borderRadius: 999, overflow: 'hidden' }}>
             <div style={{
               height: '100%', borderRadius: 999, backgroundColor: C.blue,
-              width: uploadPct > 0 ? `${uploadPct}%` : '100%',
-              transition: 'width 0.4s ease',
-              animation: uploadPct === 0 ? 'pulse 2s cubic-bezier(.4,0,.6,1) infinite' : 'none',
+              width: phase === 'process' ? '100%' : (uploadPct > 0 ? `${uploadPct}%` : '100%'),
+              transition: phase === 'upload' ? 'width 0.4s ease' : 'none',
+              animation: phase === 'process' ? 'pulse 1.5s cubic-bezier(.4,0,.6,1) infinite' : 'none',
             }} />
           </div>
-          {(isVideo || mode === 'convert') && (
-            <p style={{ textAlign: 'center', fontSize: 12, color: C.gray400, marginTop: 8 }}>
-              {phase === 'upload' ? 'Uploading securely…' : `Server is ${mode === 'convert' ? 'converting' : 'compressing'}… almost done.`}
-            </p>
-          )}
+          <p style={{ textAlign: 'center', fontSize: 12, color: C.gray400, marginTop: 8 }}>
+            {phase === 'upload'
+              ? 'Uploading securely… large files can take a few minutes.'
+              : `Server is ${mode === 'convert' ? 'converting' : 'compressing'}… may take several minutes for large files.`}
+          </p>
         </div>
       )}
 
