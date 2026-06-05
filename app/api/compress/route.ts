@@ -126,6 +126,11 @@ export async function POST(req: NextRequest) {
       ffmpegPreset = q >= 80 ? 'slow' : q >= 50 ? 'medium' : 'fast';
     }
 
+    // Cap preset for large files — slow/medium presets use too much RAM on 1GB droplets
+    const sizeMB = file.size / (1024 * 1024);
+    if (sizeMB > 100 && ffmpegPreset === 'slow')   ffmpegPreset = 'veryfast';
+    if (sizeMB > 200 && ffmpegPreset === 'medium') ffmpegPreset = 'veryfast';
+
     const fileId = `${Date.now()}-${createHash('sha256').update(file.name).digest('hex').slice(0, 8)}`;
     const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const tempPath = `/tmp/${fileId}-${safeFileName}`;
@@ -139,11 +144,12 @@ export async function POST(req: NextRequest) {
     try {
       await writeFile(tempPath, Buffer.from(await file.arrayBuffer()));
 
+      // -threads 2: limit CPU cores so ffmpeg doesn't spike RAM on multi-threaded encode
       const ffmpegCmd = useWebM
-        ? `ffmpeg -i "${tempPath}" -c:v libvpx-vp9 -crf ${crf} -b:v 0 -c:a libopus -b:a 128k "${outputPath}"`
-        : `ffmpeg -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`;
+        ? `ffmpeg -threads 2 -i "${tempPath}" -c:v libvpx-vp9 -crf ${crf} -b:v 0 -c:a libopus -b:a 128k "${outputPath}"`
+        : `ffmpeg -threads 2 -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`;
 
-      await execAsync(ffmpegCmd);
+      await execAsync(ffmpegCmd, { maxBuffer: 10 * 1024 * 1024 });
 
       // Input no longer needed — free disk space before streaming response
       try { await unlink(tempPath); inputDeleted = true; } catch {}
