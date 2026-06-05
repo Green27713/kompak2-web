@@ -36,6 +36,48 @@ const initialState: CompressionState = {
   compressedSizeFormatted: "",
 };
 
+async function compressVideoViaServer(
+  file: File,
+  quality: number,
+  onProgress: (p: number) => void
+): Promise<{ url: string; sizeBytes: number; mimeType: string }> {
+  // Simulate upload progress since fetch doesn't report it
+  onProgress(5);
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("quality", String(quality));
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min
+
+  try {
+    const res = await fetch("/api/compress", {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+
+    onProgress(90);
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Server error ${res.status}${body ? `: ${body}` : ""}`);
+    }
+
+    const blob = await res.blob();
+    onProgress(100);
+
+    return {
+      url: URL.createObjectURL(blob),
+      sizeBytes: blob.size,
+      mimeType: "video/mp4",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function useCompression() {
   const [state, setState] = useState<CompressionState>(initialState);
 
@@ -66,17 +108,30 @@ export function useCompression() {
         sizeBytes = result.sizeBytes;
         format = result.format;
       } else {
-        const crf = Math.round(51 - (quality / 100) * 51);
-        const result = await compressVideo(file, {
-          crf,
-          resolution: "original",
-          outputFormat: "mp4",
-          onProgress: (p) =>
-            setState((s) => ({ ...s, progress: Math.round(p * 100) })),
-        });
-        outputUrl = result.url;
-        sizeBytes = result.sizeBytes;
-        format = result.mimeType;
+        // Try server-side FFmpeg first (faster), fall back to browser WASM
+        try {
+          const result = await compressVideoViaServer(
+            file,
+            quality,
+            (p) => setState((s) => ({ ...s, progress: p }))
+          );
+          outputUrl = result.url;
+          sizeBytes = result.sizeBytes;
+          format = result.mimeType;
+        } catch (serverErr) {
+          console.warn("Server video compression failed, falling back to browser WASM:", serverErr);
+          setState((s) => ({ ...s, progress: 0 }));
+          const crf = Math.round(51 - (quality / 100) * 51);
+          const result = await compressVideo(file, {
+            crf,
+            resolution: "original",
+            outputFormat: "mp4",
+            onProgress: (p) => setState((s) => ({ ...s, progress: Math.round(p * 100) })),
+          });
+          outputUrl = result.url;
+          sizeBytes = result.sizeBytes;
+          format = result.mimeType;
+        }
       }
 
       const savings = calculateSavings(file.size, sizeBytes);
