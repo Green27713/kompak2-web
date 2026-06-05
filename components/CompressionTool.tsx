@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { compressImage } from '../src/services/compression/compressImage';
 import { getFileCategory } from '../src/services/compression/index';
 
@@ -158,7 +158,11 @@ export default function CompressionTool() {
   const [videoFmt, setVideoFmt] = useState<VideoFmt>('mp4');
   const [imageFmt, setImageFmt] = useState<ImageFmt>('jpg');
   const [dragging, setDragging] = useState(false);
+  const [elapsedSecs, setElapsedSecs] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
 
   async function pickFile(raw: File) {
     if (raw.size > MAX_BYTES) { setError('File too large. Max is 500 MB.'); return; }
@@ -196,7 +200,7 @@ export default function CompressionTool() {
     const isVideo = file.type.startsWith('video/');
     const useServer = isVideo || mode === 'convert';
 
-    setStatus('processing'); setPhase('upload'); setUploadPct(0); setError(null);
+    setStatus('processing'); setPhase('upload'); setUploadPct(0); setError(null); setElapsedSecs(0);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -213,7 +217,11 @@ export default function CompressionTool() {
         const { blob, origSize, compSize } = await xhrUpload(
           formData, controller.signal,
           pct => { setPhase('upload'); setUploadPct(pct); },
-          () => { setPhase('process'); setUploadPct(100); }
+          () => {
+            setPhase('process'); setUploadPct(100); setElapsedSecs(0);
+            let s = 0;
+            intervalRef.current = setInterval(() => { s += 1; setElapsedSecs(s); }, 1000);
+          }
         );
 
         setPhase('process'); setUploadPct(90);
@@ -242,6 +250,7 @@ export default function CompressionTool() {
       setStatus('error');
     } finally {
       clearTimeout(timeout);
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     }
   }, [file, quality, videoFmt, imageFmt, mode]);
 
@@ -260,10 +269,11 @@ export default function CompressionTool() {
   const savings = originalSize > 0 ? Math.max(0, Math.round((1 - compressedSize / originalSize) * 100)) : 0;
   const isProcessing = status === 'processing';
 
+  const fmtElapsed = (s: number) => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
   const progressLabel = !isProcessing ? '' :
     !isVideo && mode === 'compress' ? 'Compressing in browser…' :
     phase === 'upload' ? `Uploading — ${uploadPct}%` :
-    mode === 'convert' ? 'Converting on server…' : 'Compressing on server…';
+    `${mode === 'convert' ? 'Converting' : 'Compressing'} on server — ${fmtElapsed(elapsedSecs)}`;
 
   const actionLabel = !file ? '' :
     mode === 'convert'
@@ -407,7 +417,9 @@ export default function CompressionTool() {
           <p style={{ textAlign: 'center', fontSize: 12, color: C.gray400, marginTop: 8 }}>
             {phase === 'upload'
               ? 'Uploading securely… large files can take a few minutes.'
-              : `Server is ${mode === 'convert' ? 'converting' : 'compressing'}… may take several minutes for large files.`}
+              : isVideo
+                ? '⏳ Do not close this tab. Videos take 1–5 minutes depending on size.'
+                : 'Converting on server… almost done.'}
           </p>
         </div>
       )}
