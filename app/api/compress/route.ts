@@ -11,7 +11,7 @@ const execAsync = promisify(exec);
 export const runtime = 'nodejs';
 export const maxDuration = 600;
 
-const IMAGE_MAX_BYTES = 10 * 1024 * 1024;  // 10MB
+const IMAGE_MAX_BYTES = 50 * 1024 * 1024;  // 50MB
 const VIDEO_MAX_BYTES = 500 * 1024 * 1024; // 500MB
 
 export async function POST(req: NextRequest) {
@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null;
     const qualityRaw = formData.get('quality') as string | null;
     const outputFormat = (formData.get('outputFormat') as string | null) || 'mp4';
+    const outputImageFormat = (formData.get('outputImageFormat') as string | null) || 'auto';
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -54,22 +55,34 @@ export async function POST(req: NextRequest) {
     // ── IMAGE: Sharp server-side compression ────────────────────────────────
     if (isImage) {
       if (file.size > IMAGE_MAX_BYTES) {
-        return NextResponse.json({ error: 'Image too large. Max 10MB.' }, { status: 413 });
+        return NextResponse.json({ error: 'Image too large. Max 50MB.' }, { status: 413 });
       }
 
       const quality = Math.min(100, Math.max(1, parseInt(qualityRaw || '80', 10)));
+      const lossless = quality === 100;
       const buffer = Buffer.from(await file.arrayBuffer());
 
       let compressed: Buffer;
       let outputMime: string;
 
-      if (file.type === 'image/png') {
-        compressed = await sharp(buffer).webp({ quality }).toBuffer();
+      // Explicit format requested (convert mode) — honour it
+      if (outputImageFormat === 'jpg') {
+        compressed = await sharp(buffer).jpeg({ quality, mozjpeg: !lossless }).toBuffer();
+        outputMime = 'image/jpeg';
+      } else if (outputImageFormat === 'png') {
+        compressed = await sharp(buffer).png({ compressionLevel: lossless ? 0 : 6 }).toBuffer();
+        outputMime = 'image/png';
+      } else if (outputImageFormat === 'webp') {
+        compressed = lossless
+          ? await sharp(buffer).webp({ lossless: true }).toBuffer()
+          : await sharp(buffer).webp({ quality }).toBuffer();
         outputMime = 'image/webp';
       } else if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
+        // Auto: JPEG → JPEG (compress mode default)
         compressed = await sharp(buffer).jpeg({ quality, mozjpeg: true }).toBuffer();
         outputMime = 'image/jpeg';
       } else {
+        // Auto: everything else → WebP (best compression)
         compressed = await sharp(buffer).webp({ quality }).toBuffer();
         outputMime = 'image/webp';
       }
