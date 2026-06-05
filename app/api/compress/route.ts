@@ -144,12 +144,13 @@ export async function POST(req: NextRequest) {
     try {
       await writeFile(tempPath, Buffer.from(await file.arrayBuffer()));
 
-      // -threads 2: limit CPU cores so ffmpeg doesn't spike RAM on multi-threaded encode
+      // -loglevel error: suppress frame-by-frame progress output — default 1MB maxBuffer
+      // overflows on long encodes (267MB video generates megabytes of stderr progress lines)
       const ffmpegCmd = useWebM
-        ? `ffmpeg -threads 2 -i "${tempPath}" -c:v libvpx-vp9 -crf ${crf} -b:v 0 -c:a libopus -b:a 128k "${outputPath}"`
-        : `ffmpeg -threads 2 -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`;
+        ? `ffmpeg -loglevel error -i "${tempPath}" -c:v libvpx-vp9 -crf ${crf} -b:v 0 -c:a libopus -b:a 128k "${outputPath}"`
+        : `ffmpeg -loglevel error -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`;
 
-      await execAsync(ffmpegCmd, { maxBuffer: 10 * 1024 * 1024 });
+      await execAsync(ffmpegCmd);
 
       // Input no longer needed — free disk space before streaming response
       try { await unlink(tempPath); inputDeleted = true; } catch {}
