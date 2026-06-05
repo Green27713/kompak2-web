@@ -9,7 +9,7 @@ import { checkRateLimit } from '@/lib/redis';
 const execAsync = promisify(exec);
 
 export const runtime = 'nodejs';
-export const maxDuration = 300;
+export const maxDuration = 600;
 
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024;  // 10MB
 const VIDEO_MAX_BYTES = 500 * 1024 * 1024; // 500MB
@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const qualityRaw = formData.get('quality') as string | null;
+    const outputFormat = (formData.get('outputFormat') as string | null) || 'mp4';
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -109,25 +110,31 @@ export async function POST(req: NextRequest) {
     const fileId = `${Date.now()}-${createHash('sha256').update(file.name).digest('hex').slice(0, 8)}`;
     const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const tempPath = `/tmp/${fileId}-${safeFileName}`;
-    const outputPath = `/tmp/${fileId}-compressed.mp4`;
+    const useWebM = outputFormat === 'webm';
+    const outputExt = useWebM ? 'webm' : 'mp4';
+    const outputPath = `/tmp/${fileId}-compressed.${outputExt}`;
 
     try {
       await writeFile(tempPath, Buffer.from(await file.arrayBuffer()));
 
-      await execAsync(
-        `ffmpeg -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`
-      );
+      const ffmpegCmd = useWebM
+        ? `ffmpeg -i "${tempPath}" -c:v libvpx-vp9 -crf ${crf} -b:v 0 -c:a libopus -b:a 128k "${outputPath}"`
+        : `ffmpeg -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`;
+
+      await execAsync(ffmpegCmd);
 
       const { readFile } = await import('fs/promises');
       const compressedBuffer = await readFile(outputPath);
       const originalSize = file.size;
       const compressedSize = compressedBuffer.length;
       const savings = Math.round((1 - compressedSize / originalSize) * 100);
+      const outputMime = useWebM ? 'video/webm' : 'video/mp4';
+      const outName = file.name.replace(/\.[^.]+$/, '') + `-compressed.${outputExt}`;
 
       return new NextResponse(compressedBuffer, {
         headers: {
-          'Content-Type': 'video/mp4',
-          'Content-Disposition': `attachment; filename="compressed-${file.name}"`,
+          'Content-Type': outputMime,
+          'Content-Disposition': `attachment; filename="${outName}"`,
           'X-Original-Size': String(originalSize),
           'X-Compressed-Size': String(compressedSize),
           'X-Savings': String(savings),

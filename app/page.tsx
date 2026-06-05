@@ -10,9 +10,9 @@ export default function Home() {
         position: 'sticky', top: 0, zIndex: 10,
       }}>
         <div style={{ maxWidth: 600, margin: '0 auto', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 20, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>
+          <a href="/" style={{ textDecoration: 'none', fontSize: 20, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>
             PixSnug<sup style={{ fontSize: 11, color: '#9CA3AF', fontWeight: 400, marginLeft: 1 }}>™</sup>
-          </span>
+          </a>
           <a
             href="https://ko-fi.com/pixsnug"
             target="_blank"
