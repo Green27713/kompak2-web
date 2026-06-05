@@ -38,6 +38,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
+    // HEIC/HEIF must be converted to JPEG client-side — Sharp won't have the codec
+    if (file.type === 'image/heic' || file.type === 'image/heif' ||
+        file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
+      return NextResponse.json({ error: 'HEIC files are converted in your browser automatically. Please refresh the page and try again.' }, { status: 415 });
+    }
+
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
 

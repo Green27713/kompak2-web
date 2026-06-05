@@ -226,7 +226,13 @@ export default function CompressionTool() {
         >
           <input type="file" id="ct-upload" style={{ display: 'none' }} onChange={onInputChange}
             accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm" />
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: C.blue100, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
           <p style={{ fontSize: 17, fontWeight: 600, color: C.gray900, margin: '0 0 6px' }}>
             {dragging ? 'Release to compress' : 'Drop your file here or click to browse'}
           </p>

@@ -26,11 +26,14 @@ export default function Home() {
 
       {/* Hero */}
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '48px 24px 8px', textAlign: 'center' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 20, padding: '5px 14px', fontSize: 12, color: '#2563EB', fontWeight: 500, marginBottom: 18 }}>
+          🔒 Free · Private · No account needed
+        </div>
         <h1 style={{ fontSize: 32, fontWeight: 700, color: '#111827', margin: '0 0 12px', letterSpacing: '-0.02em' }}>
           Compress Images &amp; Videos
         </h1>
         <p style={{ fontSize: 16, color: '#6B7280', margin: 0, lineHeight: 1.6 }}>
-          Free, fast, and private. Up to 500 MB. Files deleted from server within seconds.
+          Up to 500 MB. JPEG · PNG · HEIC · MP4 · WebM. Files deleted from server instantly.
         </p>
       </div>
 
