@@ -4,7 +4,33 @@ import { useState, useCallback, useRef } from 'react';
 import { compressImage } from '../src/services/compression/compressImage';
 import { getFileCategory } from '../src/services/compression/index';
 
-const MAX_BYTES = 500 * 1024 * 1024; // 500MB
+const MAX_BYTES = 500 * 1024 * 1024;
+
+// Colors
+const C = {
+  blue: '#2563EB',
+  blueDark: '#1D4ED8',
+  blue50: '#EFF6FF',
+  blue100: '#DBEAFE',
+  blue200: '#BFDBFE',
+  gray50: '#F9FAFB',
+  gray100: '#F3F4F6',
+  gray200: '#E5E7EB',
+  gray300: '#D1D5DB',
+  gray400: '#9CA3AF',
+  gray500: '#6B7280',
+  gray700: '#374151',
+  gray900: '#111827',
+  green: '#16A34A',
+  greenDark: '#15803D',
+  green50: '#F0FDF4',
+  green200: '#BBF7D0',
+  green800: '#166534',
+  red: '#DC2626',
+  red50: '#FEF2F2',
+  red200: '#FECACA',
+  white: '#FFFFFF',
+};
 
 function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -26,148 +52,99 @@ export default function CompressionTool() {
   const abortRef = useRef<AbortController | null>(null);
 
   function pickFile(f: File) {
-    if (f.size > MAX_BYTES) {
-      setError(`File too large. Max is 500 MB.`);
-      return;
-    }
-    if (!getFileCategory(f)) {
-      setError('Unsupported file type. Please use JPEG, PNG, WebP, HEIC, MP4, MOV, or WebM.');
-      return;
-    }
+    if (f.size > MAX_BYTES) { setError('File too large. Max is 500 MB.'); return; }
+    if (!getFileCategory(f)) { setError('Unsupported file type. Use JPEG, PNG, WebP, HEIC, MP4, MOV, or WebM.'); return; }
     if (outputUrl) URL.revokeObjectURL(outputUrl);
-    setFile(f);
-    setError(null);
-    setProgress(0);
-    setStatus('idle');
-    setOutputUrl(null);
+    setFile(f); setError(null); setProgress(0); setStatus('idle'); setOutputUrl(null);
   }
 
   function onInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (f) pickFile(f);
+    const f = e.target.files?.[0]; if (f) pickFile(f);
   }
-
   function onDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragging(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) pickFile(f);
+    e.preventDefault(); setDragging(false);
+    const f = e.dataTransfer.files?.[0]; if (f) pickFile(f);
   }
 
   const handleCompress = useCallback(async () => {
     if (!file) return;
-
     const isVideo = file.type.startsWith('video/');
-    setStatus('processing');
-    setIsServerMode(isVideo);
-    setProgress(isVideo ? 5 : 0);
-    setError(null);
+    setStatus('processing'); setIsServerMode(isVideo); setProgress(isVideo ? 5 : 0); setError(null);
 
     try {
       if (isVideo) {
-        // Videos always go to server — FFmpeg is faster and more reliable than browser WASM
         const formData = new FormData();
         formData.append('file', file);
         formData.append('quality', String(quality));
-
         const controller = new AbortController();
         abortRef.current = controller;
         const timeout = setTimeout(() => controller.abort(), 300_000);
-
         try {
-          const res = await fetch('/api/compress', {
-            method: 'POST',
-            body: formData,
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeout);
-          setProgress(90);
-
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({ error: 'Server error' }));
-            throw new Error(body.error || `Server error ${res.status}`);
-          }
-
+          const res = await fetch('/api/compress', { method: 'POST', body: formData, signal: controller.signal });
+          clearTimeout(timeout); setProgress(90);
+          if (!res.ok) { const b = await res.json().catch(() => ({ error: 'Server error' })); throw new Error(b.error || `Error ${res.status}`); }
           const blob = await res.blob();
           const origSize = parseInt(res.headers.get('X-Original-Size') || String(file.size));
           const compSize = parseInt(res.headers.get('X-Compressed-Size') || String(blob.size));
-
           setOutputUrl(URL.createObjectURL(blob));
           setOutputFilename(`compressed-${file.name.replace(/\.[^.]+$/, '')}.mp4`);
-          setOriginalSize(origSize);
-          setCompressedSize(compSize);
-        } finally {
-          clearTimeout(timeout);
-        }
+          setOriginalSize(origSize); setCompressedSize(compSize);
+        } finally { clearTimeout(timeout); }
       } else {
-        // Images: compress in browser first, server is the implementation (Sharp via API)
         const result = await compressImage(file, { quality });
         const res = await fetch(result.dataUrl);
         const blob = await res.blob();
-
-        setOutputUrl(URL.createObjectURL(blob));
         const ext = blob.type.includes('webp') ? 'webp' : blob.type.includes('png') ? 'png' : 'jpg';
+        setOutputUrl(URL.createObjectURL(blob));
         setOutputFilename(`compressed-${file.name.replace(/\.[^.]+$/, '')}.${ext}`);
-        setOriginalSize(file.size);
-        setCompressedSize(result.sizeBytes);
-        setProgress(100);
+        setOriginalSize(file.size); setCompressedSize(result.sizeBytes); setProgress(100);
       }
-
-      setProgress(100);
-      setStatus('completed');
+      setProgress(100); setStatus('completed');
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        setError('Compression timed out. Try a smaller file or check your connection.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Compression failed. Please try again.');
-      }
+      if (err instanceof Error && err.name === 'AbortError') setError('Timed out. Try a smaller file or check your connection.');
+      else setError(err instanceof Error ? err.message : 'Compression failed. Please try again.');
       setStatus('error');
     }
   }, [file, quality]);
 
   const handleDownload = useCallback(() => {
     if (!outputUrl) return;
-    const a = document.createElement('a');
-    a.href = outputUrl;
-    a.download = outputFilename;
-    a.click();
+    const a = document.createElement('a'); a.href = outputUrl; a.download = outputFilename; a.click();
   }, [outputUrl, outputFilename]);
 
   const handleReset = useCallback(() => {
     abortRef.current?.abort();
     if (outputUrl) URL.revokeObjectURL(outputUrl);
-    setFile(null);
-    setStatus('idle');
-    setProgress(0);
-    setError(null);
-    setOutputUrl(null);
+    setFile(null); setStatus('idle'); setProgress(0); setError(null); setOutputUrl(null);
   }, [outputUrl]);
 
   const isVideo = file?.type.startsWith('video/');
   const savings = originalSize > 0 ? Math.max(0, Math.round((1 - compressedSize / originalSize) * 100)) : 0;
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-6">
+    <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 24px 48px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Drop Zone */}
       {!file && (
         <div
-          className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer bg-gray-50 ${dragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}
+          style={{
+            border: `2px dashed ${dragging ? C.blue : C.gray300}`,
+            borderRadius: 16, padding: '56px 40px', textAlign: 'center',
+            cursor: 'pointer', backgroundColor: dragging ? C.blue50 : C.gray50,
+            transition: 'all 0.2s',
+          }}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
-          onClick={() => document.getElementById('upload')?.click()}
+          onClick={() => document.getElementById('ct-upload')?.click()}
         >
-          <input type="file" onChange={onInputChange} className="hidden" id="upload"
+          <input type="file" id="ct-upload" style={{ display: 'none' }} onChange={onInputChange}
             accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm" />
-          <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-          </svg>
-          <p className="text-lg font-semibold text-gray-800">
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
+          <p style={{ fontSize: 17, fontWeight: 600, color: C.gray900, margin: '0 0 6px' }}>
             {dragging ? 'Release to compress' : 'Drop your file here or click to browse'}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p style={{ fontSize: 13, color: C.gray500, margin: 0 }}>
             JPEG · PNG · WebP · HEIC · MP4 · MOV · WebM · max 500 MB
           </p>
         </div>
@@ -175,26 +152,26 @@ export default function CompressionTool() {
 
       {/* File Info */}
       {file && (
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200 flex items-center justify-between">
+        <div style={{ backgroundColor: C.white, borderRadius: 12, padding: '14px 18px', border: `1px solid ${C.gray200}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <div>
-            <p className="font-medium text-gray-900 truncate max-w-xs">{file.name}</p>
-            <p className="text-sm text-gray-500">{formatSize(file.size)} · {isVideo ? 'Video' : 'Image'}</p>
+            <p style={{ margin: '0 0 3px', fontWeight: 600, color: C.gray900, fontSize: 14 }}>{file.name}</p>
+            <p style={{ margin: 0, fontSize: 12, color: C.gray500 }}>{formatSize(file.size)} · {isVideo ? 'Video' : 'Image'}</p>
           </div>
           {status === 'idle' && (
-            <button onClick={handleReset} className="text-sm text-gray-400 hover:text-gray-600 ml-4">✕</button>
+            <button onClick={handleReset} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gray400, fontSize: 18, lineHeight: 1, padding: '0 0 0 12px' }}>✕</button>
           )}
         </div>
       )}
 
-      {/* Privacy Badge — videos */}
+      {/* Privacy Badge — videos only */}
       {file && isVideo && status === 'idle' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl overflow-hidden">
-          <div className="bg-blue-600 text-white px-4 py-2 font-semibold flex items-center gap-2 text-sm">
-            <span>⚡</span> Fast &amp; Secure Server Compression
+        <div style={{ border: `1px solid ${C.blue200}`, borderRadius: 14, overflow: 'hidden', backgroundColor: C.blue50 }}>
+          <div style={{ backgroundColor: C.blue, color: C.white, padding: '10px 16px', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+            ⚡ Fast &amp; Secure Server Compression
           </div>
-          <div className="p-4 bg-white m-3 rounded-lg shadow-sm border border-gray-100">
-            <p className="font-semibold text-gray-900 mb-2 text-sm">🔒 Privacy Guarantee:</p>
-            <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+          <div style={{ margin: 12, backgroundColor: C.white, borderRadius: 10, padding: '14px 16px', border: `1px solid ${C.gray100}` }}>
+            <p style={{ margin: '0 0 8px', fontWeight: 600, color: C.gray900, fontSize: 13 }}>🔒 Privacy Guarantee:</p>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: C.gray700, lineHeight: 1.7 }}>
               <li>Transferred via HTTPS — encrypted in transit</li>
               <li>Automatically deleted within 1 second of completion</li>
               <li>Never stored, logged, or shared</li>
@@ -205,19 +182,16 @@ export default function CompressionTool() {
 
       {/* Quality Slider */}
       {file && status === 'idle' && (
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm text-gray-600">
-            <span className="font-medium">Quality</span>
-            <span>{quality}%</span>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: C.gray700, marginBottom: 8 }}>
+            <span style={{ fontWeight: 500 }}>Quality</span>
+            <span style={{ color: C.gray500 }}>{quality}%</span>
           </div>
-          <input
-            type="range" min={1} max={100} value={quality}
+          <input type="range" min={1} max={100} value={quality}
             onChange={(e) => setQuality(Number(e.target.value))}
-            className="w-full accent-blue-600"
-          />
-          <div className="flex justify-between text-xs text-gray-400">
-            <span>Smaller file</span>
-            <span>Better quality</span>
+            style={{ width: '100%', accentColor: C.blue }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.gray400, marginTop: 4 }}>
+            <span>Smaller file</span><span>Better quality</span>
           </div>
         </div>
       )}
@@ -226,7 +200,14 @@ export default function CompressionTool() {
       {file && status === 'idle' && (
         <button
           onClick={handleCompress}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-full shadow-lg shadow-blue-500/30 transition-all"
+          style={{
+            width: '100%', backgroundColor: C.blue, color: C.white,
+            border: 'none', borderRadius: 50, padding: '14px 0',
+            fontSize: 15, fontWeight: 600, cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(37,99,235,0.35)', transition: 'background 0.15s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = C.blueDark)}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = C.blue)}
         >
           Compress {isVideo ? 'Video' : 'Image'}
         </button>
@@ -234,22 +215,20 @@ export default function CompressionTool() {
 
       {/* Progress */}
       {status === 'processing' && (
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm font-medium text-gray-700">
-            <span>
-              {isServerMode
-                ? progress < 90 ? 'Uploading to secure server…' : 'Compressing…'
-                : 'Compressing in browser…'}
-            </span>
-            <span>{progress > 5 ? `${progress}%` : 'Please wait'}</span>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 500, color: C.gray700, marginBottom: 8 }}>
+            <span>{isServerMode ? (progress < 90 ? 'Uploading to secure server…' : 'Compressing…') : 'Compressing in browser…'}</span>
+            <span style={{ color: C.gray500 }}>{progress > 5 ? `${progress}%` : 'Please wait'}</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-            <div
-              className={`h-2.5 rounded-full transition-all duration-500 ${progress <= 5 ? 'animate-pulse bg-blue-400 w-full' : 'bg-blue-600'}`}
-              style={{ width: progress > 5 ? `${progress}%` : '100%' }}
-            />
+          <div style={{ width: '100%', height: 8, backgroundColor: C.gray200, borderRadius: 999, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 999, backgroundColor: C.blue,
+              width: progress > 5 ? `${progress}%` : '100%',
+              transition: 'width 0.5s ease',
+              animation: progress <= 5 ? 'pulse 2s cubic-bezier(.4,0,.6,1) infinite' : 'none',
+            }} />
           </div>
-          <p className="text-xs text-gray-500 text-center">
+          <p style={{ textAlign: 'center', fontSize: 12, color: C.gray400, marginTop: 8 }}>
             {isServerMode ? 'Large files may take 10–60 seconds to process.' : 'Processing locally in your browser.'}
           </p>
         </div>
@@ -257,33 +236,21 @@ export default function CompressionTool() {
 
       {/* Success */}
       {status === 'completed' && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center space-y-4">
-          <h3 className="text-xl font-bold text-green-800">✅ Compression Complete!</h3>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <p className="text-gray-500">Original</p>
-              <p className="font-semibold text-gray-800">{formatSize(originalSize)}</p>
-            </div>
-            <div>
-              <p className="text-gray-500">Compressed</p>
-              <p className="font-semibold text-gray-800">{formatSize(compressedSize)}</p>
-            </div>
-            <div>
-              <p className="text-gray-500">Saved</p>
-              <p className="font-bold text-green-700 text-lg">{savings}%</p>
-            </div>
+        <div style={{ backgroundColor: C.green50, border: `1px solid ${C.green200}`, borderRadius: 16, padding: 28, textAlign: 'center' }}>
+          <p style={{ fontSize: 20, fontWeight: 700, color: C.green800, margin: '0 0 16px' }}>✅ Compression Complete!</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+            {[['Original', formatSize(originalSize)], ['Compressed', formatSize(compressedSize)], ['Saved', `${savings}%`]].map(([label, val], i) => (
+              <div key={label}>
+                <p style={{ margin: '0 0 4px', fontSize: 12, color: C.gray500 }}>{label}</p>
+                <p style={{ margin: 0, fontSize: i === 2 ? 22 : 14, fontWeight: i === 2 ? 700 : 600, color: i === 2 ? C.green : C.gray900 }}>{val}</p>
+              </div>
+            ))}
           </div>
-          <div className="flex gap-3 justify-center pt-2 flex-wrap">
-            <button
-              onClick={handleDownload}
-              className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-full shadow-lg shadow-green-500/30 transition-all"
-            >
-              Download
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={handleDownload} style={{ backgroundColor: C.green, color: C.white, border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }}>
+              ⬇ Download
             </button>
-            <button
-              onClick={handleReset}
-              className="bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-6 rounded-full border border-gray-200 transition-all"
-            >
+            <button onClick={handleReset} style={{ backgroundColor: C.white, color: C.gray700, border: `1px solid ${C.gray200}`, borderRadius: 50, padding: '12px 22px', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
               Compress Another
             </button>
           </div>
@@ -292,11 +259,11 @@ export default function CompressionTool() {
 
       {/* Error */}
       {status === 'error' && (
-        <div className="space-y-3">
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-center text-sm">
+        <div>
+          <div style={{ backgroundColor: C.red50, border: `1px solid ${C.red200}`, color: C.red, borderRadius: 12, padding: '12px 16px', fontSize: 13, textAlign: 'center' }}>
             {error || 'Compression failed. Please try again.'}
           </div>
-          <button onClick={handleReset} className="w-full text-sm text-gray-500 hover:text-gray-700 py-2">
+          <button onClick={handleReset} style={{ width: '100%', marginTop: 10, background: 'none', border: 'none', color: C.gray400, fontSize: 13, cursor: 'pointer', padding: '6px 0' }}>
             ← Try a different file
           </button>
         </div>
