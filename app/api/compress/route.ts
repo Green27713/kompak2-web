@@ -188,7 +188,9 @@ export async function POST(req: NextRequest) {
         ? `ffmpeg -loglevel error ${threadFlag} -i "${tempPath}" -c:v libvpx-vp9 -crf ${crf} -b:v 0 -c:a libopus -b:a 128k "${outputPath}"`
         : `ffmpeg -loglevel error ${threadFlag} -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`;
 
+      console.log(`[compress] FFmpeg start: ${sizeMB.toFixed(0)} MB, preset=${ffmpegPreset}, threads=${threads}, crf=${crf}`);
       await execAsync(ffmpegCmd, { maxBuffer: 10 * 1024 * 1024 });
+      console.log(`[compress] FFmpeg done`);
 
       // Input no longer needed — free space before streaming response
       if (chunkedFilePath && uploadId) {
@@ -209,6 +211,7 @@ export async function POST(req: NextRequest) {
       const outName = videoName.replace(/\.[^.]+$/, '') + `-compressed.${outputExt}`;
 
       // Stream directly from disk — avoids loading the whole file into RAM
+      console.log(`[compress] Streaming response: ${outputSize} bytes`);
       const nodeStream = createReadStream(outputPath);
       nodeStream.on('close', async () => { try { await unlink(outputPath); } catch {} });
 
