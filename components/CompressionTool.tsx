@@ -5,6 +5,8 @@ import { compressImage } from '../src/services/compression/compressImage';
 import { getFileCategory } from '../src/services/compression/index';
 
 const MAX_BYTES = 500 * 1024 * 1024;
+const CHUNK_SIZE = 5 * 1024 * 1024;
+const CHUNKED_THRESHOLD = 50 * 1024 * 1024;
 
 const C = {
   blue: '#2563EB', blueDark: '#1D4ED8', blue50: '#EFF6FF', blue100: '#DBEAFE', blue200: '#BFDBFE',
@@ -55,6 +57,71 @@ async function normalizeHEIC(f: File): Promise<File> {
     const blob = Array.isArray(result) ? result[0] : result;
     return new File([blob], f.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' });
   }
+}
+
+async function chunkedVideoUpload(
+  file: File,
+  quality: number,
+  outputFormat: string,
+  signal: AbortSignal,
+  onProgress: (pct: number) => void,
+  onUploadComplete: () => void,
+): Promise<{ blob: Blob; origSize: number; compSize: number }> {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const uploadId = crypto.randomUUID();
+
+  const initRes = await fetch('/api/upload/init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uploadId, filename: file.name, totalChunks }),
+    signal,
+  });
+  if (!initRes.ok) throw new Error('Failed to initialize upload');
+
+  for (let i = 0; i < totalChunks; i++) {
+    if (signal.aborted) throw Object.assign(new Error('Cancelled'), { name: 'AbortError' });
+    const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+    const res = await fetch('/api/upload/chunk', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Upload-ID': uploadId,
+        'X-Chunk-Index': String(i),
+      },
+      body: chunk,
+      signal,
+    });
+    if (!res.ok) throw new Error(`Chunk ${i} failed`);
+    onProgress(Math.round(((i + 1) / totalChunks) * 75));
+  }
+
+  const finalRes = await fetch('/api/upload/finalize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uploadId }),
+    signal,
+  });
+  if (!finalRes.ok) throw new Error('Failed to finalize upload');
+
+  onUploadComplete();
+
+  const compressRes = await fetch('/api/compress', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uploadId, quality, outputFormat }),
+    signal,
+  });
+  if (!compressRes.ok) {
+    const b = await compressRes.json().catch(() => ({}));
+    throw new Error((b as { error?: string }).error || `Server error ${compressRes.status}`);
+  }
+
+  const blob = await compressRes.blob();
+  return {
+    blob,
+    origSize: parseInt(compressRes.headers.get('X-Original-Size') || '0'),
+    compSize: parseInt(compressRes.headers.get('X-Compressed-Size') || '0'),
+  };
 }
 
 function xhrUpload(
@@ -208,21 +275,29 @@ export default function CompressionTool() {
 
     try {
       if (useServer) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('quality', mode === 'convert' ? '100' : String(quality));
-        if (isVideo) formData.append('outputFormat', videoFmt);
-        if (!isVideo) formData.append('outputImageFormat', imageFmt);
+        const onUploadProgress = (pct: number) => { setPhase('upload'); setUploadPct(pct); };
+        const onUploadComplete = () => {
+          setPhase('process'); setUploadPct(100); setElapsedSecs(0);
+          let s = 0;
+          intervalRef.current = setInterval(() => { s += 1; setElapsedSecs(s); }, 1000);
+        };
 
-        const { blob, origSize, compSize } = await xhrUpload(
-          formData, controller.signal,
-          pct => { setPhase('upload'); setUploadPct(pct); },
-          () => {
-            setPhase('process'); setUploadPct(100); setElapsedSecs(0);
-            let s = 0;
-            intervalRef.current = setInterval(() => { s += 1; setElapsedSecs(s); }, 1000);
-          }
-        );
+        const useChunked = isVideo && file.size > CHUNKED_THRESHOLD;
+        const qualityVal = mode === 'convert' ? 100 : quality;
+
+        const { blob, origSize, compSize } = useChunked
+          ? await chunkedVideoUpload(file, qualityVal, videoFmt, controller.signal, onUploadProgress, onUploadComplete)
+          : await xhrUpload(
+              (() => {
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('quality', String(qualityVal));
+                if (isVideo) fd.append('outputFormat', videoFmt);
+                if (!isVideo) fd.append('outputImageFormat', imageFmt);
+                return fd;
+              })(),
+              controller.signal, onUploadProgress, onUploadComplete
+            );
 
         setPhase('process'); setUploadPct(90);
         const ext = isVideo ? videoFmt : imageFmt;
