@@ -66,6 +66,7 @@ async function chunkedVideoUpload(
   signal: AbortSignal,
   onProgress: (pct: number) => void,
   onUploadComplete: () => void,
+  onCompressProgress: (pct: number) => void,
 ): Promise<{ blob: Blob; origSize: number; compSize: number }> {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   const uploadId = crypto.randomUUID();
@@ -105,6 +106,7 @@ async function chunkedVideoUpload(
 
   onUploadComplete();
 
+  // POST /api/compress returns 202 immediately with a jobId
   const compressRes = await fetch('/api/compress', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -115,13 +117,37 @@ async function chunkedVideoUpload(
     const b = await compressRes.json().catch(() => ({}));
     throw new Error((b as { error?: string }).error || `Server error ${compressRes.status}`);
   }
+  const { jobId } = await compressRes.json();
 
-  const blob = await compressRes.blob();
-  return {
-    blob,
-    origSize: parseInt(compressRes.headers.get('X-Original-Size') || '0'),
-    compSize: parseInt(compressRes.headers.get('X-Compressed-Size') || '0'),
-  };
+  // Poll /api/status every 3 seconds until done
+  while (true) {
+    if (signal.aborted) throw Object.assign(new Error('Cancelled'), { name: 'AbortError' });
+    await new Promise(r => setTimeout(r, 3000));
+    if (signal.aborted) throw Object.assign(new Error('Cancelled'), { name: 'AbortError' });
+
+    const statusRes = await fetch(`/api/status?jobId=${jobId}`, { signal });
+    if (!statusRes.ok) continue; // transient error — retry next tick
+
+    const status = await statusRes.json() as { status: string; progress?: number; error?: string };
+
+    if (status.status === 'error') {
+      throw new Error(status.error || 'Compression failed on server');
+    }
+
+    if (status.status === 'complete') {
+      onCompressProgress(100);
+      const downloadRes = await fetch(`/api/download?jobId=${jobId}`, { signal });
+      if (!downloadRes.ok) throw new Error('Download failed');
+      const blob = await downloadRes.blob();
+      return {
+        blob,
+        origSize: parseInt(downloadRes.headers.get('X-Original-Size') || '0'),
+        compSize: parseInt(downloadRes.headers.get('X-Compressed-Size') || '0'),
+      };
+    }
+
+    if (typeof status.progress === 'number') onCompressProgress(status.progress);
+  }
 }
 
 function xhrUpload(
@@ -226,6 +252,7 @@ export default function CompressionTool() {
   const [imageFmt, setImageFmt] = useState<ImageFmt>('jpg');
   const [dragging, setDragging] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(0);
+  const [compressProgress, setCompressProgress] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -267,7 +294,7 @@ export default function CompressionTool() {
     const isVideo = file.type.startsWith('video/');
     const useServer = isVideo || mode === 'convert';
 
-    setStatus('processing'); setPhase('upload'); setUploadPct(0); setError(null); setElapsedSecs(0);
+    setStatus('processing'); setPhase('upload'); setUploadPct(0); setError(null); setElapsedSecs(0); setCompressProgress(0);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -282,11 +309,11 @@ export default function CompressionTool() {
           intervalRef.current = setInterval(() => { s += 1; setElapsedSecs(s); }, 1000);
         };
 
-        const useChunked = isVideo && file.size > CHUNKED_THRESHOLD;
+        const useChunked = isVideo; // all videos use async chunked path
         const qualityVal = mode === 'convert' ? 100 : quality;
 
         const { blob, origSize, compSize } = useChunked
-          ? await chunkedVideoUpload(file, qualityVal, videoFmt, controller.signal, onUploadProgress, onUploadComplete)
+          ? await chunkedVideoUpload(file, qualityVal, videoFmt, controller.signal, onUploadProgress, onUploadComplete, (p) => setCompressProgress(p))
           : await xhrUpload(
               (() => {
                 const fd = new FormData();
@@ -337,7 +364,7 @@ export default function CompressionTool() {
   const handleReset = useCallback(() => {
     abortRef.current?.abort();
     if (outputUrl) URL.revokeObjectURL(outputUrl);
-    setFile(null); setStatus('idle'); setUploadPct(0); setError(null); setOutputUrl(null);
+    setFile(null); setStatus('idle'); setUploadPct(0); setError(null); setOutputUrl(null); setCompressProgress(0);
   }, [outputUrl]);
 
   const isVideo = file?.type.startsWith('video/');
@@ -348,7 +375,7 @@ export default function CompressionTool() {
   const progressLabel = !isProcessing ? '' :
     !isVideo && mode === 'compress' ? 'Compressing in browser…' :
     phase === 'upload' ? `Uploading — ${uploadPct}%` :
-    `${mode === 'convert' ? 'Converting' : 'Compressing'} on server — ${fmtElapsed(elapsedSecs)}`;
+    `${mode === 'convert' ? 'Converting' : 'Compressing'} on server — ${fmtElapsed(elapsedSecs)}${compressProgress > 5 ? ` (${compressProgress}%)` : ''}`;
 
   const actionLabel = !file ? '' :
     mode === 'convert'
@@ -484,9 +511,9 @@ export default function CompressionTool() {
           <div style={{ width: '100%', height: 8, backgroundColor: C.gray200, borderRadius: 999, overflow: 'hidden' }}>
             <div style={{
               height: '100%', borderRadius: 999, backgroundColor: C.blue,
-              width: phase === 'process' ? '100%' : (uploadPct > 0 ? `${uploadPct}%` : '100%'),
-              transition: phase === 'upload' ? 'width 0.4s ease' : 'none',
-              animation: phase === 'process' ? 'pulse 1.5s cubic-bezier(.4,0,.6,1) infinite' : 'none',
+              width: phase === 'process' ? `${Math.max(5, compressProgress)}%` : (uploadPct > 0 ? `${uploadPct}%` : '5%'),
+              transition: 'width 0.8s ease',
+              animation: phase === 'process' && compressProgress < 95 ? 'pulse 1.5s cubic-bezier(.4,0,.6,1) infinite' : 'none',
             }} />
           </div>
           <p style={{ textAlign: 'center', fontSize: 12, color: C.gray400, marginTop: 8 }}>
