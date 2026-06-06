@@ -159,6 +159,10 @@ export async function POST(req: NextRequest) {
     const sizeMB = videoSize / (1024 * 1024);
     if (sizeMB > 100 && ffmpegPreset === 'slow')   ffmpegPreset = 'veryfast';
     if (sizeMB > 200 && ffmpegPreset === 'medium') ffmpegPreset = 'veryfast';
+    if (sizeMB > 300) ffmpegPreset = 'superfast'; // minimize RAM for very large files
+
+    // Limit threads for large files to cap RAM usage (x264 uses ~100 MB per thread)
+    const threads = sizeMB > 200 ? 2 : 0; // 0 = ffmpeg auto
 
     const videoName = chunkedFilePath ? chunkedFileName : file!.name;
     const fileId = `${Date.now()}-${createHash('sha256').update(videoName).digest('hex').slice(0, 8)}`;
@@ -177,11 +181,12 @@ export async function POST(req: NextRequest) {
         await writeFile(tempPath, Buffer.from(await file!.arrayBuffer()));
       }
 
+      const threadFlag = threads > 0 ? `-threads ${threads}` : '';
       // -loglevel error: suppress frame-by-frame progress output — default 1MB maxBuffer
       // overflows on long encodes (267MB video generates megabytes of stderr progress lines)
       const ffmpegCmd = useWebM
-        ? `ffmpeg -loglevel error -i "${tempPath}" -c:v libvpx-vp9 -crf ${crf} -b:v 0 -c:a libopus -b:a 128k "${outputPath}"`
-        : `ffmpeg -loglevel error -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`;
+        ? `ffmpeg -loglevel error ${threadFlag} -i "${tempPath}" -c:v libvpx-vp9 -crf ${crf} -b:v 0 -c:a libopus -b:a 128k "${outputPath}"`
+        : `ffmpeg -loglevel error ${threadFlag} -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`;
 
       await execAsync(ffmpegCmd, { maxBuffer: 10 * 1024 * 1024 });
 
