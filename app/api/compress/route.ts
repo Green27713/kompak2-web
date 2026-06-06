@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     const isImage = !chunkedFilePath && file!.type.startsWith('image/');
 
     // ── IMAGE: Sharp server-side compression ────────────────────────────────
-    if (isImage) {
+    if (isImage && file) {
       if (file.size > IMAGE_MAX_BYTES) {
         return NextResponse.json({ error: 'Image too large. Max 50MB.' }, { status: 413 });
       }
