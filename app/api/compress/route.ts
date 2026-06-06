@@ -68,18 +68,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
-    // HEIC/HEIF must be converted to JPEG client-side — Sharp won't have the codec
-    if (file.type === 'image/heic' || file.type === 'image/heif' ||
-        file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
-      return NextResponse.json({ error: 'HEIC files are converted in your browser automatically. Please refresh the page and try again.' }, { status: 415 });
+    // Chunked uploads are always video — skip image checks
+    if (!chunkedFilePath) {
+      if (file!.type === 'image/heic' || file!.type === 'image/heif' ||
+          file!.name.toLowerCase().endsWith('.heic') || file!.name.toLowerCase().endsWith('.heif')) {
+        return NextResponse.json({ error: 'HEIC files are converted in your browser automatically. Please refresh the page and try again.' }, { status: 415 });
+      }
+      if (!file!.type.startsWith('image/') && !file!.type.startsWith('video/')) {
+        return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
+      }
     }
 
-    const isImage = file.type.startsWith('image/');
-    const isVideo = file.type.startsWith('video/');
-
-    if (!isImage && !isVideo) {
-      return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
-    }
+    const isImage = !chunkedFilePath && file!.type.startsWith('image/');
 
     // ── IMAGE: Sharp server-side compression ────────────────────────────────
     if (isImage) {
