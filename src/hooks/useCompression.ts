@@ -36,12 +36,18 @@ const initialState: CompressionState = {
   compressedSizeFormatted: "",
 };
 
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
+const CHUNKED_THRESHOLD = 50 * 1024 * 1024; // files > 50 MB use chunked upload
+
 async function compressVideoViaServer(
   file: File,
   quality: number,
   onProgress: (p: number) => void
 ): Promise<{ url: string; sizeBytes: number; mimeType: string }> {
-  // Simulate upload progress since fetch doesn't report it
+  if (file.size > CHUNKED_THRESHOLD) {
+    return compressVideoChunked(file, quality, onProgress);
+  }
+
   onProgress(5);
 
   const formData = new FormData();
@@ -68,11 +74,79 @@ async function compressVideoViaServer(
     const blob = await res.blob();
     onProgress(100);
 
-    return {
-      url: URL.createObjectURL(blob),
-      sizeBytes: blob.size,
-      mimeType: "video/mp4",
-    };
+    return { url: URL.createObjectURL(blob), sizeBytes: blob.size, mimeType: "video/mp4" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function compressVideoChunked(
+  file: File,
+  quality: number,
+  onProgress: (p: number) => void
+): Promise<{ url: string; sizeBytes: number; mimeType: string }> {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const uploadId = crypto.randomUUID();
+
+  // Init
+  const initRes = await fetch("/api/upload/init", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uploadId, filename: file.name, totalChunks }),
+  });
+  if (!initRes.ok) throw new Error("Failed to initialize upload");
+
+  // Upload chunks (0–50% progress)
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const chunk = file.slice(start, start + CHUNK_SIZE);
+
+    const chunkRes = await fetch("/api/upload/chunk", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Upload-ID": uploadId,
+        "X-Chunk-Index": String(i),
+      },
+      body: chunk,
+    });
+    if (!chunkRes.ok) throw new Error(`Chunk ${i} upload failed`);
+
+    onProgress(Math.round(((i + 1) / totalChunks) * 50));
+  }
+
+  // Finalize
+  const finalRes = await fetch("/api/upload/finalize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uploadId }),
+  });
+  if (!finalRes.ok) throw new Error("Failed to finalize upload");
+
+  onProgress(55);
+
+  // Compress (55–100% progress)
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 600_000); // 10 min
+
+  try {
+    const res = await fetch("/api/compress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadId, quality }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Server error ${res.status}${body ? `: ${body}` : ""}`);
+    }
+
+    onProgress(90);
+    const blob = await res.blob();
+    onProgress(100);
+
+    return { url: URL.createObjectURL(blob), sizeBytes: blob.size, mimeType: "video/mp4" };
   } finally {
     clearTimeout(timeout);
   }

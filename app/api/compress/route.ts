@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
-import { writeFile, unlink } from 'fs/promises';
+import { writeFile, unlink, readFile, rm } from 'fs/promises';
+import { join } from 'path';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 import { createHash } from 'crypto';
@@ -15,12 +16,34 @@ const IMAGE_MAX_BYTES = 50 * 1024 * 1024;  // 50MB
 const VIDEO_MAX_BYTES = 500 * 1024 * 1024; // 500MB
 
 export async function POST(req: NextRequest) {
+  let uploadId: string | null = null;
+
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
-    const qualityRaw = formData.get('quality') as string | null;
-    const outputFormat = (formData.get('outputFormat') as string | null) || 'mp4';
-    const outputImageFormat = (formData.get('outputImageFormat') as string | null) || 'auto';
+    const contentType = req.headers.get('content-type') || '';
+    let file: File | null = null;
+    let qualityRaw: string | null = null;
+    let outputFormat = 'mp4';
+    let outputImageFormat = 'auto';
+
+    if (contentType.includes('application/json')) {
+      const body = await req.json();
+      uploadId = body.uploadId;
+      qualityRaw = String(body.quality ?? 80);
+      outputFormat = body.outputFormat || 'mp4';
+
+      if (!uploadId) return NextResponse.json({ error: 'Missing uploadId' }, { status: 400 });
+
+      const uploadDir = join('/tmp', 'uploads', uploadId);
+      const metadata = JSON.parse(await readFile(join(uploadDir, 'metadata.json'), 'utf-8'));
+      const fileBuffer = await readFile(join(uploadDir, 'combined'));
+      file = new File([fileBuffer], metadata.filename || 'video.mp4', { type: 'video/mp4' });
+    } else {
+      const formData = await req.formData();
+      file = formData.get('file') as File | null;
+      qualityRaw = formData.get('quality') as string | null;
+      outputFormat = (formData.get('outputFormat') as string | null) || 'mp4';
+      outputImageFormat = (formData.get('outputImageFormat') as string | null) || 'auto';
+    }
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -150,7 +173,7 @@ export async function POST(req: NextRequest) {
         ? `ffmpeg -loglevel error -i "${tempPath}" -c:v libvpx-vp9 -crf ${crf} -b:v 0 -c:a libopus -b:a 128k "${outputPath}"`
         : `ffmpeg -loglevel error -i "${tempPath}" -c:v libx264 -crf ${crf} -preset ${ffmpegPreset} -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`;
 
-      await execAsync(ffmpegCmd);
+      await execAsync(ffmpegCmd, { maxBuffer: 10 * 1024 * 1024 });
 
       // Input no longer needed — free disk space before streaming response
       try { await unlink(tempPath); inputDeleted = true; } catch {}
@@ -183,8 +206,9 @@ export async function POST(req: NextRequest) {
         },
       });
     } finally {
-      if (!inputDeleted)   { try { await unlink(tempPath); }  catch {} }
+      if (!inputDeleted)    { try { await unlink(tempPath); }  catch {} }
       if (!outputStreaming) { try { await unlink(outputPath); } catch {} }
+      if (uploadId) { try { await rm(join('/tmp', 'uploads', uploadId), { recursive: true, force: true }); } catch {} }
     }
 
   } catch (err) {
