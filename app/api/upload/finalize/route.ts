@@ -1,25 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFile, writeFile, unlink } from 'fs/promises';
+import { readFile, unlink, open } from 'fs/promises';
 import { join } from 'path';
+import { createReadStream } from 'fs';
+import { pipeline } from 'stream/promises';
+import { createWriteStream } from 'fs';
 
 export async function POST(request: NextRequest) {
   const { uploadId } = await request.json();
 
   const uploadDir = join('/tmp', 'uploads', uploadId);
   const metadata = JSON.parse(await readFile(join(uploadDir, 'metadata.json'), 'utf-8'));
+  const combinedPath = join(uploadDir, 'combined');
 
-  const chunks: Buffer[] = [];
+  // Stream-concatenate chunks to avoid loading entire file into RAM
+  const outStream = createWriteStream(combinedPath);
   for (let i = 0; i < metadata.totalChunks; i++) {
-    chunks.push(await readFile(join(uploadDir, `chunk-${i}`)));
+    const chunkPath = join(uploadDir, `chunk-${i}`);
+    await pipeline(createReadStream(chunkPath), outStream, { end: false });
+    await unlink(chunkPath).catch(() => {});
   }
-
-  await writeFile(join(uploadDir, 'combined'), Buffer.concat(chunks));
-
-  await Promise.all(
-    Array.from({ length: metadata.totalChunks }, (_, i) =>
-      unlink(join(uploadDir, `chunk-${i}`)).catch(() => {})
-    )
-  );
+  outStream.end();
+  await new Promise((resolve, reject) => {
+    outStream.on('finish', resolve);
+    outStream.on('error', reject);
+  });
 
   return NextResponse.json({ success: true, uploadId });
 }
