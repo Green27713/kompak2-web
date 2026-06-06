@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
     await unlink(chunkPath).catch(() => {});
   }
   outStream.end();
-  await new Promise((resolve, reject) => {
-    outStream.on('finish', resolve);
+  await new Promise<void>((resolve, reject) => {
+    outStream.on('finish', () => resolve());
     outStream.on('error', reject);
   });
 
