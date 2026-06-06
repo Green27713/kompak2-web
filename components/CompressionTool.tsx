@@ -271,7 +271,7 @@ export default function CompressionTool() {
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 600_000);
+    const timeout = setTimeout(() => controller.abort(), 1200_000); // 20 min
 
     try {
       if (useServer) {
