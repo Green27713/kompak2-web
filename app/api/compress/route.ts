@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
-import { writeFile, unlink, readFile, rm } from 'fs/promises';
+import { writeFile, unlink, readFile, rm, stat } from 'fs/promises';
 import { join } from 'path';
 import { promisify } from 'util';
 import { exec } from 'child_process';
@@ -25,6 +25,11 @@ export async function POST(req: NextRequest) {
     let outputFormat = 'mp4';
     let outputImageFormat = 'auto';
 
+    // For chunked uploads: path to the already-on-disk combined file (avoids loading into RAM)
+    let chunkedFilePath: string | null = null;
+    let chunkedFileSize = 0;
+    let chunkedFileName = 'video.mp4';
+
     if (contentType.includes('application/json')) {
       const body = await req.json();
       uploadId = body.uploadId;
@@ -35,8 +40,9 @@ export async function POST(req: NextRequest) {
 
       const uploadDir = join('/tmp', 'uploads', uploadId);
       const metadata = JSON.parse(await readFile(join(uploadDir, 'metadata.json'), 'utf-8'));
-      const fileBuffer = await readFile(join(uploadDir, 'combined'));
-      file = new File([fileBuffer], metadata.filename || 'video.mp4', { type: 'video/mp4' });
+      chunkedFilePath = join(uploadDir, 'combined');
+      chunkedFileSize = (await stat(chunkedFilePath)).size;
+      chunkedFileName = metadata.filename || 'video.mp4';
     } else {
       const formData = await req.formData();
       file = formData.get('file') as File | null;
@@ -45,7 +51,7 @@ export async function POST(req: NextRequest) {
       outputImageFormat = (formData.get('outputImageFormat') as string | null) || 'auto';
     }
 
-    if (!file) {
+    if (!file && !chunkedFilePath) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
@@ -133,7 +139,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── VIDEO: FFmpeg server-side compression ────────────────────────────────
-    if (file.size > VIDEO_MAX_BYTES) {
+    const videoSize = chunkedFilePath ? chunkedFileSize : file!.size;
+    if (videoSize > VIDEO_MAX_BYTES) {
       return NextResponse.json({ error: 'Video too large. Max 500MB.' }, { status: 413 });
     }
 
@@ -145,27 +152,30 @@ export async function POST(req: NextRequest) {
     else if (qualityRaw === 'low')    { crf = 28; ffmpegPreset = 'fast'; }
     else {
       const q = Math.min(100, Math.max(1, parseInt(qualityRaw || '80', 10)));
-      crf = Math.round(18 + (1 - q / 100) * 10); // quality 100 → CRF 18, quality 1 → CRF 28
+      crf = Math.round(18 + (1 - q / 100) * 10);
       ffmpegPreset = q >= 80 ? 'slow' : q >= 50 ? 'medium' : 'fast';
     }
 
-    // Cap preset for large files — slow/medium presets use too much RAM on 1GB droplets
-    const sizeMB = file.size / (1024 * 1024);
+    const sizeMB = videoSize / (1024 * 1024);
     if (sizeMB > 100 && ffmpegPreset === 'slow')   ffmpegPreset = 'veryfast';
     if (sizeMB > 200 && ffmpegPreset === 'medium') ffmpegPreset = 'veryfast';
 
-    const fileId = `${Date.now()}-${createHash('sha256').update(file.name).digest('hex').slice(0, 8)}`;
-    const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const tempPath = `/tmp/${fileId}-${safeFileName}`;
+    const videoName = chunkedFilePath ? chunkedFileName : file!.name;
+    const fileId = `${Date.now()}-${createHash('sha256').update(videoName).digest('hex').slice(0, 8)}`;
     const useWebM = outputFormat === 'webm';
     const outputExt = useWebM ? 'webm' : 'mp4';
     const outputPath = `/tmp/${fileId}-compressed.${outputExt}`;
+
+    // For chunked uploads the file is already on disk — pass path directly to FFmpeg (no RAM copy)
+    const tempPath = chunkedFilePath ?? `/tmp/${fileId}-${videoName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 
     let inputDeleted = false;
     let outputStreaming = false;
 
     try {
-      await writeFile(tempPath, Buffer.from(await file.arrayBuffer()));
+      if (!chunkedFilePath) {
+        await writeFile(tempPath, Buffer.from(await file!.arrayBuffer()));
+      }
 
       // -loglevel error: suppress frame-by-frame progress output — default 1MB maxBuffer
       // overflows on long encodes (267MB video generates megabytes of stderr progress lines)
@@ -175,8 +185,12 @@ export async function POST(req: NextRequest) {
 
       await execAsync(ffmpegCmd, { maxBuffer: 10 * 1024 * 1024 });
 
-      // Input no longer needed — free disk space before streaming response
-      try { await unlink(tempPath); inputDeleted = true; } catch {}
+      // Input no longer needed — free space before streaming response
+      if (chunkedFilePath && uploadId) {
+        try { await rm(join('/tmp', 'uploads', uploadId), { recursive: true, force: true }); inputDeleted = true; } catch {}
+      } else {
+        try { await unlink(tempPath); inputDeleted = true; } catch {}
+      }
 
       const { stat } = await import('fs/promises');
       const { createReadStream } = await import('fs');
@@ -184,10 +198,10 @@ export async function POST(req: NextRequest) {
 
       const fileStat = await stat(outputPath);
       const outputSize = fileStat.size;
-      const originalSize = file.size;
+      const originalSize = videoSize;
       const savings = Math.max(0, Math.round((1 - outputSize / originalSize) * 100));
       const outputMime = useWebM ? 'video/webm' : 'video/mp4';
-      const outName = file.name.replace(/\.[^.]+$/, '') + `-compressed.${outputExt}`;
+      const outName = videoName.replace(/\.[^.]+$/, '') + `-compressed.${outputExt}`;
 
       // Stream directly from disk — avoids loading the whole file into RAM
       const nodeStream = createReadStream(outputPath);
@@ -206,9 +220,14 @@ export async function POST(req: NextRequest) {
         },
       });
     } finally {
-      if (!inputDeleted)    { try { await unlink(tempPath); }  catch {} }
+      if (!inputDeleted) {
+        if (chunkedFilePath && uploadId) {
+          try { await rm(join('/tmp', 'uploads', uploadId), { recursive: true, force: true }); } catch {}
+        } else {
+          try { await unlink(tempPath); } catch {}
+        }
+      }
       if (!outputStreaming) { try { await unlink(outputPath); } catch {} }
-      if (uploadId) { try { await rm(join('/tmp', 'uploads', uploadId), { recursive: true, force: true }); } catch {} }
     }
 
   } catch (err) {
