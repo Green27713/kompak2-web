@@ -194,25 +194,58 @@ export async function POST(req: NextRequest) {
 
       console.log(`[job:${jobId}] start – ${(videoSize / 1024 / 1024).toFixed(0)} MB crf=${crf}`);
 
+      // Capture stderr so we can include FFmpeg error messages in job state
+      const stderrChunks: Buffer[] = [];
       const ffmpegProcess = spawn('ffmpeg', ffmpegArgs, {
-        stdio: ['ignore', 'ignore', 'ignore'],
+        stdio: ['ignore', 'ignore', 'pipe'],
       });
+      ffmpegProcess.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
 
       ffmpegProcess.on('close', async (code) => {
         const jobFile = join(jobDir, 'job.json');
+        const stderrText = Buffer.concat(stderrChunks).toString('utf-8').trim();
+        if (stderrText) console.error(`[job:${jobId}] FFmpeg stderr:`, stderrText);
+
         try {
           const job = JSON.parse(await readFile(jobFile, 'utf-8'));
-          if (code === 0) {
+
+          let failReason: string | null = null;
+
+          if (code !== 0) {
+            failReason = stderrText || `FFmpeg exited with code ${code}`;
+          } else {
+            // Verify output file exists and has a reasonable size
+            let outSize = 0;
+            try { outSize = (await stat(outputPath)).size; } catch { failReason = 'Output file missing after encode'; }
+            if (!failReason && outSize < 1024) {
+              failReason = `Output file too small (${outSize} bytes) — FFmpeg may have failed silently`;
+            }
+
+            // Validate the output is a playable video via ffprobe
+            if (!failReason) {
+              try {
+                await execAsync(
+                  `ffprobe -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 "${outputPath}"`,
+                  { timeout: 15_000 }
+                );
+              } catch {
+                failReason = 'Output file is not a valid video (ffprobe validation failed)';
+              }
+            }
+          }
+
+          if (failReason) {
+            console.error(`[job:${jobId}] failed: ${failReason}`);
+            try { await unlink(outputPath); } catch {}
+            await writeFile(jobFile, JSON.stringify({ ...job, status: 'error', error: failReason }));
+          } else {
             console.log(`[job:${jobId}] complete`);
             await writeFile(jobFile, JSON.stringify({ ...job, status: 'complete' }));
-          } else {
-            console.error(`[job:${jobId}] FFmpeg exit ${code}`);
-            await writeFile(jobFile, JSON.stringify({ ...job, status: 'error', error: `FFmpeg failed (exit ${code})` }));
-            try { await unlink(outputPath); } catch {}
           }
         } catch (e) {
           console.error(`[job:${jobId}] job update error:`, e);
         }
+
         // Clean up input regardless of outcome
         if (uploadId && chunkedFilePath) {
           try { await rm(join('/tmp', 'uploads', uploadId), { recursive: true, force: true }); } catch {}
