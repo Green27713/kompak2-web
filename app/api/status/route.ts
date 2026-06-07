@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   // If the server restarted while FFmpeg was running, the job will be stuck in 'processing'
   const age = Date.now() - new Date(job.createdAt).getTime();
-  if (age > 25 * 60 * 1000) {
+  if (age > 60 * 60 * 1000) { // 60 min — allow time for large files
     await writeFile(jobFile, JSON.stringify({ ...job, status: 'error', error: 'Job timed out' })).catch(() => {});
     return NextResponse.json({ status: 'error', error: 'Job timed out', progress: 0 });
   }

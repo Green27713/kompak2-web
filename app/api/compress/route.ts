@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60; // video path returns 202 immediately; image path is fast
 
 const IMAGE_MAX_BYTES = 50 * 1024 * 1024;
-const VIDEO_MAX_BYTES = 500 * 1024 * 1024;
+const VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 
 export async function POST(req: NextRequest) {
   try {
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
     // ── VIDEO: async FFmpeg job — returns 202 immediately ──────────────────
     const videoSize = chunkedFilePath ? chunkedFileSize : file!.size;
     if (videoSize > VIDEO_MAX_BYTES) {
-      return NextResponse.json({ error: 'Video too large. Max 500MB.' }, { status: 413 });
+      return NextResponse.json({ error: 'Video too large. Max 2 GB.' }, { status: 413 });
     }
 
     const videoName = chunkedFilePath ? chunkedFileName : file!.name;

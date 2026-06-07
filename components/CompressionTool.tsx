@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { compressImage } from '../src/services/compression/compressImage';
 import { getFileCategory } from '../src/services/compression/index';
 
-const MAX_BYTES = 500 * 1024 * 1024;
+const MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const CHUNKED_THRESHOLD = 50 * 1024 * 1024;
 
@@ -259,7 +259,7 @@ export default function CompressionTool() {
   useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
 
   async function pickFile(raw: File) {
-    if (raw.size > MAX_BYTES) { setError('File too large. Max is 500 MB.'); return; }
+    if (raw.size > MAX_BYTES) { setError('File too large. Max is 2 GB.'); return; }
     if (!getFileCategory(raw) && !isHEICFile(raw)) {
       setError('Unsupported file type. Use JPEG, PNG, WebP, HEIC, MP4, MOV, or WebM.');
       return;
@@ -298,7 +298,7 @@ export default function CompressionTool() {
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 1200_000); // 20 min
+    const timeout = setTimeout(() => controller.abort(), 3_600_000); // 60 min
 
     try {
       if (useServer) {
@@ -427,7 +427,7 @@ export default function CompressionTool() {
             {dragging ? `Release to ${mode}` : `Drop your file here or click to browse`}
           </p>
           <p style={{ fontSize: 13, color: C.gray500, margin: 0 }}>
-            JPEG · PNG · WebP · <strong>HEIC</strong> · MP4 · MOV · WebM · max 500 MB
+            JPEG · PNG · WebP · <strong>HEIC</strong> · MP4 · MOV · WebM · max 2 GB
           </p>
         </div>
       )}
