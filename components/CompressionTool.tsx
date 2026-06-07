@@ -157,7 +157,7 @@ function xhrUpload(
   signal: AbortSignal,
   onUploadProgress: (pct: number) => void,
   onUploadComplete?: () => void,
-): Promise<{ blob: Blob; origSize: number; compSize: number }> {
+): Promise<{ blob: Blob; origSize: number; compSize: number; alreadyOptimized: boolean }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     signal.addEventListener('abort', () => xhr.abort());
@@ -176,6 +176,7 @@ function xhrUpload(
         blob: xhr.response as Blob,
         origSize: parseInt(xhr.getResponseHeader('X-Original-Size') || '0'),
         compSize: parseInt(xhr.getResponseHeader('X-Compressed-Size') || '0'),
+        alreadyOptimized: xhr.getResponseHeader('X-Already-Optimized') === 'true',
       });
     });
     xhr.addEventListener('error', () => reject(new Error('Network error. Check your connection and try again.')));
