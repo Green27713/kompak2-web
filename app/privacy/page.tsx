@@ -37,17 +37,17 @@ export default function PrivacyPage() {
 
       <div style={S.body}>
         <h1 style={S.h1}>Privacy Policy</h1>
-        <p style={S.updated}>Last updated: June 2025</p>
+        <p style={S.updated}>Last updated: June 2026</p>
 
         <div style={S.highlight}>
           <p style={S.highlightText}>
-            🔒 Zero-Retention Guarantee — PixSnug does not store, log, sell, or share your files or personal data. Files uploaded for video compression are deleted from our server the moment your download completes, or within 60 minutes at the latest.
+            🔒 Zero-Retention Guarantee (Free tier) — PixSnug does not store, log, sell, or share your files. Files uploaded for video compression are deleted from our server the moment your download completes, or within 60 minutes at the latest. Pro and Enterprise tiers collect an email address for billing and notifications only — see Section 8 below.
           </p>
         </div>
 
         <h2 style={S.h2}>1. Who We Are</h2>
         <p style={S.p}>
-          PixSnug ("we", "us", "our") is a free file compression tool available at pixsnug.com. It is operated as an independent project.
+          PixSnug ("we", "us", "our") is a file compression tool available at pixsnug.com, operated as an independent project. It offers a Free tier and paid Pro and Enterprise tiers with higher file size limits.
         </p>
 
         <h2 style={S.h2}>2. What Files We Process</h2>
@@ -65,10 +65,11 @@ export default function PrivacyPage() {
         </ul>
         <p style={S.p}>We do not write your files to any database, object storage, backup system, or persistent disk location.</p>
 
-        <h2 style={S.h2}>4. Information We Do Not Collect</h2>
+        <h2 style={S.h2}>4. Information We Collect (by Plan)</h2>
+        <p style={S.p}><strong>Free tier:</strong> We collect no personal information. No name, no email, no account. No sign-up or login required.</p>
+        <p style={S.p}><strong>Pro and Enterprise tiers:</strong> We collect your email address when you subscribe. This is used solely for billing receipts, job completion notifications, and essential service updates. We do not sell this data or use it for advertising.</p>
+        <p style={S.p}>Across all plans:</p>
         <ul style={S.ul}>
-          <li>We do not collect your name, email address, or any account information</li>
-          <li>We do not require sign-up or login</li>
           <li>We do not use cookies or tracking pixels</li>
           <li>We do not use Google Analytics or any third-party analytics</li>
           <li>We do not log the content of your files</li>
@@ -84,27 +85,37 @@ export default function PrivacyPage() {
           We use Redis-based rate limiting keyed to your IP address to prevent abuse. IP addresses are held in memory only and are not written to persistent storage.
         </p>
 
-        <h2 style={S.h2}>7. Third-Party Services</h2>
+        <h2 style={S.h2}>7. Third-Party Services (Free Tier)</h2>
         <p style={S.p}>
-          PixSnug does not use third-party advertising, analytics, or data brokers. The optional "Support" link points to Ko-fi, which has its own privacy policy.
+          On the Free tier, PixSnug does not use third-party advertising, analytics, or data brokers. The optional "Support" link points to Ko-fi, which has its own privacy policy.
         </p>
 
-        <h2 style={S.h2}>8. Children's Privacy</h2>
+        <h2 style={S.h2}>8. Pro and Enterprise Tiers</h2>
         <p style={S.p}>
-          PixSnug is not directed at children under 13. We do not knowingly collect information from children.
+          Pro and Enterprise plans unlock higher file size limits (2 GB and 5 GB respectively) and priority processing. Subscribing to a paid plan involves two additional third-party services:
+        </p>
+        <p style={S.p}><strong>Payment Processing — Stripe:</strong> All payments are processed by Stripe, Inc. We do not store your credit card number or billing address on our servers. Stripe receives your payment details and billing information directly. Stripe may retain this data in accordance with their own privacy policy. You can review it at stripe.com/privacy.</p>
+        <p style={S.p}><strong>Email Delivery — Resend:</strong> We use Resend to send transactional emails such as billing receipts and compression job notifications. Your email address is shared with Resend solely to deliver these messages. Resend does not use your email for advertising. You can review Resend's privacy policy at resend.com/legal/privacy-policy.</p>
+        <p style={S.p}>
+          Your email address is retained for as long as you hold an active paid subscription. Upon cancellation, your email and account record are deleted within 30 days. You may request immediate deletion by emailing us at <a href="mailto:privacy@pixsnug.com" style={{ color: '#2563EB' }}>privacy@pixsnug.com</a>.
+        </p>
+        <p style={S.p}>The Zero-Retention Guarantee for uploaded files applies equally to all plans — files are never stored beyond your active session.</p>
+
+        <h2 style={S.h2}>9. Children's Privacy</h2>
+        <p style={S.p}>
+          PixSnug is not directed at children under 13. We do not knowingly collect information from children. Paid tiers require users to be at least 18 years old or have parental consent.
         </p>
 
-        <h2 style={S.h2}>9. Your Rights</h2>
-        <p style={S.p}>
-          Because we collect no personal data and retain no files, there is nothing to access, correct, or delete. If you have concerns, contact us at the address below.
-        </p>
+        <h2 style={S.h2}>10. Your Rights</h2>
+        <p style={S.p}><strong>Free tier:</strong> Because we collect no personal data and retain no files, there is nothing to access, correct, or delete.</p>
+        <p style={S.p}><strong>Pro and Enterprise tiers:</strong> You have the right to access, correct, or delete your email address and subscription record at any time. To exercise these rights, email us at <a href="mailto:privacy@pixsnug.com" style={{ color: '#2563EB' }}>privacy@pixsnug.com</a>. If you are in the EU or UK, you also have the right to lodge a complaint with your local data protection authority.</p>
 
-        <h2 style={S.h2}>10. Changes to This Policy</h2>
+        <h2 style={S.h2}>11. Changes to This Policy</h2>
         <p style={S.p}>
           We may update this policy from time to time. The "Last updated" date at the top of this page will reflect any changes. Continued use of PixSnug after changes constitutes acceptance.
         </p>
 
-        <h2 style={S.h2}>11. Contact</h2>
+        <h2 style={S.h2}>12. Contact</h2>
         <p style={S.p}>
           Questions? Email us at: <a href="mailto:privacy@pixsnug.com" style={{ color: '#2563EB' }}>privacy@pixsnug.com</a>
         </p>

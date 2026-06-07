@@ -35,7 +35,7 @@ export default function TermsPage() {
 
       <div style={S.body}>
         <h1 style={S.h1}>Terms of Service</h1>
-        <p style={S.updated}>Last updated: June 2025</p>
+        <p style={S.updated}>Last updated: June 2026</p>
 
         <h2 style={S.h2}>1. Acceptance of Terms</h2>
         <p style={S.p}>
@@ -88,21 +88,36 @@ export default function TermsPage() {
         </p>
 
         <h2 style={S.h2}>9. File Size and Rate Limits</h2>
+        <p style={S.p}>File size limits depend on your plan:</p>
+        <ul style={S.ul}>
+          <li><strong>Free:</strong> up to 600 MB per file</li>
+          <li><strong>Pro:</strong> up to 2 GB per file</li>
+          <li><strong>Enterprise:</strong> up to 5 GB per file</li>
+        </ul>
+        <p style={S.p}>Image compression is limited to 50 MB per file on all plans. Rate limits are enforced per IP address. We reserve the right to change these limits at any time.</p>
+
+        <h2 style={S.h2}>10. Paid Tiers</h2>
         <p style={S.p}>
-          The Service currently supports files up to 2 GB for videos and 50 MB for images. Rate limits are enforced per IP address. We reserve the right to change these limits at any time.
+          Pro and Enterprise plans are available for users who require higher file size limits or additional features. Paid plans are billed through Stripe, a third-party payment processor. By subscribing to a paid plan, you agree to Stripe's Terms of Service and authorize recurring charges to your payment method.
+        </p>
+        <p style={S.p}>
+          To activate and manage a paid plan, we collect your email address for account identification and to send billing receipts, compression job notifications, and service updates. You may unsubscribe from non-essential emails at any time. Your email address is not sold or shared with third parties for marketing purposes.
+        </p>
+        <p style={S.p}>
+          Subscriptions renew automatically unless cancelled before the renewal date. Refunds are handled at our discretion. To cancel, contact us at <a href="mailto:privacy@pixsnug.com" style={{ color: '#2563EB' }}>privacy@pixsnug.com</a>.
         </p>
 
-        <h2 style={S.h2}>10. Changes to Terms</h2>
+        <h2 style={S.h2}>11. Changes to Terms</h2>
         <p style={S.p}>
           We may update these Terms at any time. The "Last updated" date will reflect changes. Continued use of the Service after changes constitutes your acceptance of the updated Terms.
         </p>
 
-        <h2 style={S.h2}>11. Governing Law</h2>
+        <h2 style={S.h2}>12. Governing Law</h2>
         <p style={S.p}>
           These Terms are governed by the laws of Thailand, without regard to conflict of law principles, reflecting where the Service is operated from.
         </p>
 
-        <h2 style={S.h2}>12. Contact</h2>
+        <h2 style={S.h2}>13. Contact</h2>
         <p style={S.p}>
           Questions? Email us at: <a href="mailto:privacy@pixsnug.com" style={{ color: '#2563EB' }}>privacy@pixsnug.com</a>
         </p>
