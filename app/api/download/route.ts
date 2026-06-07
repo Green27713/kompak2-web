@@ -13,6 +13,7 @@ interface JobState {
   outputFilename: string;
   outputMime: string;
   originalSize: number;
+  alreadyOptimized?: boolean;
 }
 
 export async function GET(req: NextRequest) {
@@ -57,6 +58,7 @@ export async function GET(req: NextRequest) {
       'X-Original-Size': String(job.originalSize),
       'X-Compressed-Size': String(outputStat.size),
       'X-Savings': String(savings),
+      'X-Already-Optimized': job.alreadyOptimized ? 'true' : 'false',
       'Cache-Control': 'no-store',
     },
   });

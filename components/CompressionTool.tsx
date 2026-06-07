@@ -138,11 +138,13 @@ async function chunkedVideoUpload(
       onCompressProgress(100);
       const downloadRes = await fetch(`/api/download?jobId=${jobId}`, { signal });
       if (!downloadRes.ok) throw new Error('Download failed');
+      const alreadyOptimized = downloadRes.headers.get('X-Already-Optimized') === 'true';
       const blob = await downloadRes.blob();
       return {
         blob,
         origSize: parseInt(downloadRes.headers.get('X-Original-Size') || '0'),
         compSize: parseInt(downloadRes.headers.get('X-Compressed-Size') || '0'),
+        alreadyOptimized,
       };
     }
 
@@ -253,6 +255,7 @@ export default function CompressionTool() {
   const [dragging, setDragging] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [compressProgress, setCompressProgress] = useState(0);
+  const [alreadyOptimized, setAlreadyOptimized] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -294,7 +297,7 @@ export default function CompressionTool() {
     const isVideo = file.type.startsWith('video/');
     const useServer = isVideo || mode === 'convert';
 
-    setStatus('processing'); setPhase('upload'); setUploadPct(0); setError(null); setElapsedSecs(0); setCompressProgress(0);
+    setStatus('processing'); setPhase('upload'); setUploadPct(0); setError(null); setElapsedSecs(0); setCompressProgress(0); setAlreadyOptimized(false);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -312,7 +315,7 @@ export default function CompressionTool() {
         const useChunked = isVideo; // all videos use async chunked path
         const qualityVal = mode === 'convert' ? 100 : quality;
 
-        const { blob, origSize, compSize } = useChunked
+        const { blob, origSize, compSize, alreadyOptimized: wasOptimized } = useChunked
           ? await chunkedVideoUpload(file, qualityVal, videoFmt, controller.signal, onUploadProgress, onUploadComplete, (p) => setCompressProgress(p))
           : await xhrUpload(
               (() => {
@@ -327,6 +330,7 @@ export default function CompressionTool() {
             );
 
         setPhase('process'); setUploadPct(90);
+        if (wasOptimized) setAlreadyOptimized(true);
         const ext = isVideo ? videoFmt : imageFmt;
         const prefix = mode === 'convert' ? 'converted' : 'compressed';
         setOutputUrl(URL.createObjectURL(blob));
@@ -364,7 +368,7 @@ export default function CompressionTool() {
   const handleReset = useCallback(() => {
     abortRef.current?.abort();
     if (outputUrl) URL.revokeObjectURL(outputUrl);
-    setFile(null); setStatus('idle'); setUploadPct(0); setError(null); setOutputUrl(null); setCompressProgress(0);
+    setFile(null); setStatus('idle'); setUploadPct(0); setError(null); setOutputUrl(null); setCompressProgress(0); setAlreadyOptimized(false);
   }, [outputUrl]);
 
   const isVideo = file?.type.startsWith('video/');
@@ -530,8 +534,13 @@ export default function CompressionTool() {
       {status === 'completed' && (
         <div style={{ backgroundColor: C.green50, border: `1px solid ${C.green200}`, borderRadius: 16, padding: 28, textAlign: 'center' }}>
           <p style={{ fontSize: 20, fontWeight: 700, color: C.green800, margin: '0 0 16px' }}>
-            {mode === 'convert' ? '🔄 Conversion Complete!' : '✅ Compression Complete!'}
+            {alreadyOptimized ? '✅ Already Optimized' : mode === 'convert' ? '🔄 Conversion Complete!' : '✅ Compression Complete!'}
           </p>
+          {alreadyOptimized && (
+            <p style={{ margin: '-8px 0 16px', fontSize: 13, color: C.gray500 }}>
+              This file is already highly compressed. Returning the original to avoid increasing the size.
+            </p>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
             {[
               ['Original', formatSize(originalSize)],

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
-import { writeFile, unlink, readFile, rm, stat, mkdir } from 'fs/promises';
+import { writeFile, unlink, readFile, rm, stat, mkdir, rename } from 'fs/promises';
 import { join } from 'path';
 import { promisify } from 'util';
 import { exec, spawn } from 'child_process';
@@ -140,6 +140,14 @@ export async function POST(req: NextRequest) {
     const outputExt = useWebM ? 'webm' : 'mp4';
     const outputMime = useWebM ? 'video/webm' : 'video/mp4';
 
+    // Original file mime — needed for smart skip (serving original instead of larger output)
+    const origExt = videoName.split('.').pop()?.toLowerCase() || 'mp4';
+    const origMimeMap: Record<string, string> = {
+      mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
+      avi: 'video/x-msvideo', mkv: 'video/x-matroska', m4v: 'video/mp4',
+    };
+    const originalMime = origMimeMap[origExt] || 'video/mp4';
+
     const jobId = randomUUID();
     const jobDir = join('/tmp', 'jobs', jobId);
     const outputPath = join(jobDir, `output.${outputExt}`);
@@ -170,6 +178,8 @@ export async function POST(req: NextRequest) {
         outputPath,
         outputFilename,
         outputMime,
+        originalFilename: videoName,
+        originalMime,
         originalSize: videoSize,
         durationMs,
         uploadId,
@@ -177,8 +187,9 @@ export async function POST(req: NextRequest) {
         createdAt: new Date().toISOString(),
       }));
 
+      // CRF 32 at default quality (80). Range 24–40: higher quality → lower CRF → bigger file.
       const q = Math.min(100, Math.max(1, parseInt(qualityRaw || '80', 10)));
-      const crf = Math.round(18 + (1 - q / 100) * 10);
+      const crf = Math.max(24, Math.min(40, Math.round(32 + (80 - q) / 10)));
 
       const ffmpegArgs = [
         '-loglevel', 'error',
@@ -186,8 +197,14 @@ export async function POST(req: NextRequest) {
         '-nostats',
         '-i', tempPath,
         ...(useWebM
-          ? ['-c:v', 'libvpx-vp9', '-crf', String(crf), '-b:v', '0', '-c:a', 'libopus', '-b:a', '128k']
-          : ['-c:v', 'libx264', '-crf', String(crf), '-preset', 'ultrafast', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart']
+          ? ['-c:v', 'libvpx-vp9', '-crf', String(crf), '-b:v', '0', '-c:a', 'libopus', '-b:a', '64k']
+          : [
+              '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', String(crf),
+              '-vf', 'scale=-2:-2',       // ensure even dimensions (required by H.264)
+              '-c:a', 'aac', '-b:a', '64k',
+              '-maxrate', '1M', '-bufsize', '2M',
+              '-movflags', '+faststart',
+            ]
         ),
         outputPath,
       ];
@@ -210,12 +227,12 @@ export async function POST(req: NextRequest) {
           const job = JSON.parse(await readFile(jobFile, 'utf-8'));
 
           let failReason: string | null = null;
+          let outSize = 0;
 
           if (code !== 0) {
             failReason = stderrText || `FFmpeg exited with code ${code}`;
           } else {
             // Verify output file exists and has a reasonable size
-            let outSize = 0;
             try { outSize = (await stat(outputPath)).size; } catch { failReason = 'Output file missing after encode'; }
             if (!failReason && outSize < 1024) {
               failReason = `Output file too small (${outSize} bytes) — FFmpeg may have failed silently`;
@@ -238,19 +255,43 @@ export async function POST(req: NextRequest) {
             console.error(`[job:${jobId}] failed: ${failReason}`);
             try { await unlink(outputPath); } catch {}
             await writeFile(jobFile, JSON.stringify({ ...job, status: 'error', error: failReason }));
+            // Clean up input on failure
+            if (uploadId && chunkedFilePath) {
+              try { await rm(join('/tmp', 'uploads', uploadId), { recursive: true, force: true }); } catch {}
+            } else {
+              try { await unlink(tempPath); } catch {}
+            }
+          } else if (outSize >= videoSize) {
+            // Smart skip: output is larger than input — serve original instead
+            console.log(`[job:${jobId}] output (${outSize}) >= input (${videoSize}), serving original`);
+            try { await unlink(outputPath); } catch {} // discard the bloated output
+            // Move the original input into the job directory (instant rename on same fs)
+            const origOutputPath = join(jobDir, `original.${origExt}`);
+            await rename(tempPath, origOutputPath);
+            await writeFile(jobFile, JSON.stringify({
+              ...job,
+              status: 'complete',
+              outputPath: origOutputPath,
+              outputFilename: videoName,
+              outputMime: originalMime,
+              alreadyOptimized: true,
+            }));
+            // Clean up upload dir shell (combined file was just moved out)
+            if (uploadId && chunkedFilePath) {
+              try { await rm(join('/tmp', 'uploads', uploadId), { recursive: true, force: true }); } catch {}
+            }
           } else {
-            console.log(`[job:${jobId}] complete`);
+            console.log(`[job:${jobId}] complete — saved ${Math.round((1 - outSize / videoSize) * 100)}%`);
             await writeFile(jobFile, JSON.stringify({ ...job, status: 'complete' }));
+            // Clean up input
+            if (uploadId && chunkedFilePath) {
+              try { await rm(join('/tmp', 'uploads', uploadId), { recursive: true, force: true }); } catch {}
+            } else {
+              try { await unlink(tempPath); } catch {}
+            }
           }
         } catch (e) {
           console.error(`[job:${jobId}] job update error:`, e);
-        }
-
-        // Clean up input regardless of outcome
-        if (uploadId && chunkedFilePath) {
-          try { await rm(join('/tmp', 'uploads', uploadId), { recursive: true, force: true }); } catch {}
-        } else {
-          try { await unlink(tempPath); } catch {}
         }
       });
 
