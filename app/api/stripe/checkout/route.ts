@@ -6,6 +6,11 @@ import { applyRateLimit } from '@/lib/rateLimit';
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
+  // Stripe not yet configured — send users home instead of throwing an error.
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json({ url: '/' });
+  }
+
   // Protect against checkout-spam (still tier-aware via middleware header).
   const limited = await applyRateLimit(req);
   if (limited) return limited;

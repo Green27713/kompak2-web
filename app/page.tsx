@@ -4,10 +4,17 @@ import SubscriptionWidget from '@/components/SubscriptionWidget';
 import { getSession } from '@/lib/session';
 
 export default async function Home() {
-  // Read session on the server — no client-side cookie parse needed.
-  const session = await getSession();
-  const tier = session.tier ?? 'free';
-  const email = session.email ?? '';
+  // Read session — wrapped in try/catch so a missing SESSION_PASSWORD env var
+  // or any iron-session error degrades gracefully to free tier instead of 500.
+  let tier: 'free' | 'pro' | 'enterprise' = 'free';
+  let email = '';
+  try {
+    const session = await getSession();
+    tier = session.tier ?? 'free';
+    email = session.email ?? '';
+  } catch {
+    // SESSION_PASSWORD not configured — page still renders, everyone gets free tier.
+  }
 
   const tierBadge: Record<typeof tier, { label: string; bg: string; color: string } | null> = {
     free:       null,
