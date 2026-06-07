@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Stripe subscribers ───────────────────────────────────────────────────────
+// Rows are created/updated exclusively by the Stripe webhook handler.
+// The iron-session cookie carries { email, tier } so most API requests
+// never hit this table — only Stripe events and the portal route do.
+model User {
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  stripeCustomerId     String   @unique
+  stripeSubscriptionId String?  @unique
+  subscriptionTier     String   @default("free")    // "free" | "pro" | "enterprise"
+  subscriptionStatus   String   @default("active")  // "active" | "cancelled" | "past_due" | "trialing"
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// ─── Enterprise waitlist ──────────────────────────────────────────────────────
+// Replaces the no-persistence /api/waitlist route.
+// Unique constraint on email means duplicate signups are a DB no-op.
+model EnterpriseWaitlist {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  status    String   @default("pending") // "pending" | "contacted" | "converted"
+}
