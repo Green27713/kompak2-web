@@ -33,7 +33,7 @@ export default function Home() {
           Compress Images &amp; Videos
         </h1>
         <p style={{ fontSize: 16, color: '#6B7280', margin: 0, lineHeight: 1.6 }}>
-          Up to 500 MB. JPEG · PNG · HEIC · MP4 · WebM. Files deleted from server instantly.
+          Up to 2 GB. JPEG · PNG · HEIC · MP4 · WebM. Files deleted from server instantly.
         </p>
       </div>
 
@@ -44,6 +44,11 @@ export default function Home() {
       <footer style={{ borderTop: '1px solid #E5E7EB', padding: '28px 24px', textAlign: 'center' }}>
         <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>© 2025 PixSnug™ — Built by a Navy veteran in Patong, Thailand</p>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9CA3AF' }}>Files are never stored, logged, or shared.</p>
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: '#9CA3AF' }}>
+          <a href="/privacy" style={{ color: '#9CA3AF', textDecoration: 'underline' }}>Privacy Policy</a>
+          {' · '}
+          <a href="/terms" style={{ color: '#9CA3AF', textDecoration: 'underline' }}>Terms of Service</a>
+        </p>
       </footer>
 
     </main>
