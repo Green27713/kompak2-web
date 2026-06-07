@@ -67,7 +67,7 @@ async function chunkedVideoUpload(
   onProgress: (pct: number) => void,
   onUploadComplete: () => void,
   onCompressProgress: (pct: number) => void,
-): Promise<{ blob: Blob; origSize: number; compSize: number }> {
+): Promise<{ blob: Blob; origSize: number; compSize: number; alreadyOptimized: boolean }> {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   const uploadId = crypto.randomUUID();
 
