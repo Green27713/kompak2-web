@@ -5,15 +5,16 @@ import { join } from 'path';
 import { promisify } from 'util';
 import { exec, spawn } from 'child_process';
 import { randomUUID } from 'crypto';
-import { checkRateLimit } from '@/lib/redis';
+import { applyRateLimit } from '@/lib/rateLimit';
+import { requireVideoSizeAllowed, VIDEO_SIZE_LIMITS } from '@/lib/requirePro';
+import { getTier } from '@/lib/rateLimit';
 
 const execAsync = promisify(exec);
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // video path returns 202 immediately; image path is fast
 
-const IMAGE_MAX_BYTES = 50 * 1024 * 1024;
-const VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
+const IMAGE_MAX_BYTES = 50 * 1024 * 1024; // 50 MB — same across all tiers
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,15 +54,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-               req.headers.get('x-real-ip') || 'anonymous';
-    let rateLimit = { allowed: true };
-    try {
-      rateLimit = await checkRateLimit(`compress:${ip}`, 100, 60 * 1000);
-    } catch {}
-    if (!rateLimit.allowed) {
-      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
-    }
+    // Tier-aware rate limiting (limits come from TIER_LIMITS in lib/session.ts).
+    // X-User-Tier is injected by proxy.ts from the session cookie.
+    const limited = await applyRateLimit(req);
+    if (limited) return limited;
 
     if (!chunkedFilePath) {
       if (file!.type === 'image/heic' || file!.type === 'image/heif' ||
@@ -130,8 +126,15 @@ export async function POST(req: NextRequest) {
 
     // ── VIDEO: async FFmpeg job — returns 202 immediately ──────────────────
     const videoSize = chunkedFilePath ? chunkedFileSize : file!.size;
-    if (videoSize > VIDEO_MAX_BYTES) {
-      return NextResponse.json({ error: 'Video too large. Max 2 GB.' }, { status: 413 });
+
+    // Enforce per-tier video size limit (free=600MB, pro=2GB, enterprise=5GB).
+    const sizeDenied = requireVideoSizeAllowed(req, videoSize);
+    if (sizeDenied) return sizeDenied;
+
+    // Hard ceiling — no single plan supports beyond 5 GB.
+    const absoluteMax = VIDEO_SIZE_LIMITS[getTier(req)];
+    if (videoSize > absoluteMax) {
+      return NextResponse.json({ error: 'Video exceeds the maximum allowed size for your plan.' }, { status: 413 });
     }
 
     const videoName = chunkedFilePath ? chunkedFileName : file!.name;
