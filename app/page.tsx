@@ -1,6 +1,21 @@
+import { Suspense } from 'react';
 import CompressionTool from '@/components/CompressionTool';
+import SubscriptionWidget from '@/components/SubscriptionWidget';
+import { getSession } from '@/lib/session';
 
-export default function Home() {
+export default async function Home() {
+  // Read session on the server — no client-side cookie parse needed.
+  const session = await getSession();
+  const tier = session.tier ?? 'free';
+  const email = session.email ?? '';
+
+  const tierBadge: Record<typeof tier, { label: string; bg: string; color: string } | null> = {
+    free:       null,
+    pro:        { label: 'PRO',        bg: '#2563EB', color: '#FFFFFF' },
+    enterprise: { label: 'ENTERPRISE', bg: '#0F172A', color: '#BFDBFE' },
+  };
+  const badge = tierBadge[tier];
+
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB', fontFamily: 'system-ui, sans-serif' }}>
 
@@ -10,9 +25,20 @@ export default function Home() {
         position: 'sticky', top: 0, zIndex: 10,
       }}>
         <div style={{ maxWidth: 600, margin: '0 auto', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <a href="/" style={{ textDecoration: 'none', fontSize: 20, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>
-            PixSnug<sup style={{ fontSize: 11, color: '#9CA3AF', fontWeight: 400, marginLeft: 1 }}>™</sup>
-          </a>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <a href="/" style={{ textDecoration: 'none', fontSize: 20, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>
+              PixSnug<sup style={{ fontSize: 11, color: '#9CA3AF', fontWeight: 400, marginLeft: 1 }}>™</sup>
+            </a>
+            {badge && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4,
+                backgroundColor: badge.bg, color: badge.color,
+              }}>
+                {badge.label}
+              </span>
+            )}
+          </div>
           <a
             href="https://ko-fi.com/pixsnug"
             target="_blank"
@@ -40,6 +66,12 @@ export default function Home() {
       {/* Tool */}
       <CompressionTool />
 
+      {/* Subscription widget — upgrade or manage billing */}
+      {/* useSearchParams inside SubscriptionWidget requires Suspense boundary */}
+      <Suspense fallback={null}>
+        <SubscriptionWidget tier={tier} email={email} />
+      </Suspense>
+
       {/* Footer */}
       <footer style={{ borderTop: '1px solid #E5E7EB', padding: '28px 24px', textAlign: 'center' }}>
         <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>© 2025 PixSnug™ — Built by a Navy veteran in Patong, Thailand</p>
@@ -48,6 +80,8 @@ export default function Home() {
           <a href="/privacy" style={{ color: '#9CA3AF', textDecoration: 'underline' }}>Privacy Policy</a>
           {' · '}
           <a href="/terms" style={{ color: '#9CA3AF', textDecoration: 'underline' }}>Terms of Service</a>
+          {' · '}
+          <a href="mailto:privacy@pixsnug.com" style={{ color: '#9CA3AF', textDecoration: 'underline' }}>Contact</a>
         </p>
       </footer>
 

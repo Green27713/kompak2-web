@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { Resend } from 'resend';
 import { getStripe, tierFromPriceId, ACTIVE_STATUSES } from '@/lib/stripe';
 import { db } from '@/lib/db';
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'markgreenslade@pixsnug.com';
+
+async function notifyAdmin(subject: string, html: string) {
+  if (!process.env.RESEND_API_KEY) return;
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    await resend.emails.send({
+      from: 'PixSnug <onboarding@resend.dev>',
+      to: ADMIN_EMAIL,
+      subject,
+      html,
+    });
+  } catch (err) {
+    console.warn('[stripe/webhook] admin notification failed (non-fatal):', err);
+  }
+}
 
 export const runtime = 'nodejs';
 
@@ -67,6 +85,13 @@ export async function POST(req: NextRequest) {
         });
 
         console.log(`[stripe/webhook] upserted user ${email} → ${tier}`);
+
+        // Notify admin of new paid signup.
+        await notifyAdmin(
+          `🎉 New PixSnug ${tier.charAt(0).toUpperCase() + tier.slice(1)} Signup: ${email}`,
+          `<p><strong>${email}</strong> just subscribed to PixSnug <strong>${tier}</strong>.</p>
+           <p style="color:#6B7280;font-size:13px;">Stripe Customer: ${cs.customer}<br>Subscription: ${cs.subscription}</p>`,
+        );
         break;
       }
 

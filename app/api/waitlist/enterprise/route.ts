@@ -17,7 +17,7 @@ const schema = z.object({
   company: z.string().max(120).optional(),
 });
 
-const ADMIN_EMAIL = 'markgreenslade27713@gmail.com';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'markgreenslade@pixsnug.com';
 
 export async function POST(req: NextRequest) {
   // 3 submissions per hour per IP — prevents spam without blocking real signups.
