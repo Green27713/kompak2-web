@@ -1,25 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unsealData } from 'iron-session';
-import type { SessionData } from '@/lib/session';
-import { sessionOptions } from '@/lib/session';
+import { sessionOptions, type SessionData } from '@/lib/session';
 
 // ─── Paths that skip session injection ───────────────────────────────────────
 // The Stripe webhook is secured by signature verification — it never needs a
 // session cookie. Public static pages don't need one either.
 const SESSION_BYPASS = ['/api/stripe/webhook'];
 
-export async function middleware(request: NextRequest) {
+// Next.js 16 renamed "middleware" to "proxy". The function must be named
+// `proxy` (or be the default export). The config.matcher works identically.
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Let bypassed paths through immediately.
   if (SESSION_BYPASS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
   // ── Decode the session cookie (if present) ──────────────────────────────────
-  // We use unsealData directly rather than getIronSession because middleware
-  // runs on the Edge runtime, which doesn't support the full Node.js crypto
-  // module. unsealData uses the Web Crypto API and is Edge-safe.
+  // unsealData uses the Web Crypto API — safe in the Edge proxy runtime.
+  // We never call the Node.js Redis or Prisma clients here.
   let tier: SessionData['tier'] = 'free';
   let email = '';
 
@@ -30,19 +29,15 @@ export async function middleware(request: NextRequest) {
         password: sessionOptions.password,
         ttl: sessionOptions.ttl,
       });
-      if (session.tier === 'pro' || session.tier === 'enterprise') {
-        tier = session.tier;
-      }
+      if (session.tier === 'pro' || session.tier === 'enterprise') tier = session.tier;
       if (session.email) email = session.email;
     } catch {
-      // Cookie is tampered, expired, or encrypted with a rotated password.
-      // Treat as unauthenticated — they'll get free-tier limits.
+      // Tampered or expired cookie — default to free tier silently.
     }
   }
 
-  // ── Inject headers for downstream route handlers ───────────────────────────
+  // ── Inject tier into downstream request headers ───────────────────────────
   // Route handlers read X-User-Tier instead of re-parsing the cookie.
-  // This keeps the crypto work in one place (here) and keeps route handlers clean.
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-user-tier', tier);
   if (email) requestHeaders.set('x-user-email', email);
@@ -50,8 +45,6 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
-// Apply to all API routes. Static assets, _next internals, and page routes
-// are excluded automatically by the :path* pattern.
 export const config = {
   matcher: ['/api/:path*'],
 };
