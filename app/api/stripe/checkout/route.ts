@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       line_items: [{ price: priceIdForTier(tier), quantity: 1 }],
       ...(customerId
         ? { customer: customerId }
-        : { customer_creation: 'always', ...(email && { customer_email: email }) }),
+        : email ? { customer_email: email } : {}),
       // {CHECKOUT_SESSION_ID} is replaced by Stripe before redirecting.
       success_url: `${baseUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/?checkout=cancelled`,
