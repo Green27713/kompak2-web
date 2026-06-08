@@ -39,7 +39,6 @@ export async function POST(req: NextRequest) {
 
     const checkoutSession = await getStripe().checkout.sessions.create({
       mode: 'subscription',
-      payment_method_types: ['card'],
       line_items: [{ price: priceIdForTier(tier), quantity: 1 }],
       ...(customerId
         ? { customer: customerId }

@@ -11,11 +11,17 @@ export const runtime = 'nodejs';
 // We retrieve the Checkout Session, upsert the User row (in case the webhook
 // hasn't fired yet), set the iron-session cookie, then redirect home.
 // This is a GET because Stripe's success_url is a browser redirect.
+// Use the public-facing base URL, not req.nextUrl.origin, which resolves to
+// localhost:3000 when the app runs behind a reverse proxy (Caddy).
+function baseUrl() {
+  return (process.env.NEXT_PUBLIC_BASE_URL ?? 'https://pixsnug.com').replace(/\/$/, '');
+}
+
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('session_id');
 
   if (!sessionId) {
-    return NextResponse.redirect(new URL('/?checkout=error', req.nextUrl.origin));
+    return NextResponse.redirect(`${baseUrl()}/?checkout=error`);
   }
 
   try {
@@ -24,7 +30,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (cs.payment_status !== 'paid' && cs.status !== 'complete') {
-      return NextResponse.redirect(new URL('/?checkout=unpaid', req.nextUrl.origin));
+      return NextResponse.redirect(`${baseUrl()}/?checkout=unpaid`);
     }
 
     const email = cs.customer_details?.email ?? (cs.customer as { email?: string })?.email ?? '';
@@ -59,9 +65,9 @@ export async function GET(req: NextRequest) {
       await setSession({ email, tier: resolvedTier, stripeCustomerId: customerId });
     }
 
-    return NextResponse.redirect(new URL('/?checkout=success', req.nextUrl.origin));
+    return NextResponse.redirect(`${baseUrl()}/success`);
   } catch (err) {
     console.error('[stripe/success]', err);
-    return NextResponse.redirect(new URL('/?checkout=error', req.nextUrl.origin));
+    return NextResponse.redirect(`${baseUrl()}/?checkout=error`);
   }
 }
