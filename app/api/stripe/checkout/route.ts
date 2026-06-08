@@ -37,13 +37,17 @@ export async function POST(req: NextRequest) {
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://pixsnug.com';
 
-    const checkoutSession = await getStripe().checkout.sessions.create({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const checkoutSession = await (getStripe().checkout.sessions.create as any)({
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceIdForTier(tier), quantity: 1 }],
       ...(customerId
         ? { customer: customerId }
         : { customer_creation: 'always', ...(email && { customer_email: email }) }),
+      // Managed Payments: Stripe handles global tax collection automatically.
+      managed_payments: { enabled: true },
+      automatic_tax: { enabled: true },
       // {CHECKOUT_SESSION_ID} is replaced by Stripe before redirecting.
       success_url: `${baseUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/?checkout=cancelled`,

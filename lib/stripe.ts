@@ -11,10 +11,9 @@ export function getStripe(): Stripe {
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('STRIPE_SECRET_KEY environment variable is not set.');
     }
-    g._stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      apiVersion: '2026-05-27.dahlia' as any,
-    });
+    // '2026-02-25.preview' is the minimum required for Managed Payments (automatic tax).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    g._stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.preview' as any });
   }
   return g._stripe;
 }
