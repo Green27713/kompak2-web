@@ -29,8 +29,7 @@ if (key.startsWith('sk_live_')) {
   process.exit(1);
 }
 
-// Use the preview API version required by the Managed Payments blueprint.
-const stripe = new Stripe(key, { apiVersion: '2026-02-25.preview' });
+const stripe = new Stripe(key, { apiVersion: '2026-05-27.preview' });
 
 async function main() {
   console.log('\nCreating PixSnug Pro product in Stripe (test mode)…\n');
