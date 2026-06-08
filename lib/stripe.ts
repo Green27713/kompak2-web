@@ -12,7 +12,7 @@ export function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY environment variable is not set.');
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    g._stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-05-27.preview' as any });
+    g._stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-05-27.dahlia' as any });
   }
   return g._stripe;
 }
