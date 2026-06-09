@@ -84,6 +84,10 @@ export async function POST(req: NextRequest) {
 
       let compressed: Buffer;
       let outputMime: string;
+      let smartContentType: string | undefined;
+      let smartChroma: string | undefined;
+      let smartQuality: number | undefined;
+      let smartSharpened: boolean | undefined;
 
       // Smart pipeline: analyse image content, pick per-image settings.
       // Only activates for JPEG output (where the per-content settings apply)
@@ -98,6 +102,10 @@ export async function POST(req: NextRequest) {
           const result = await smartCompress(buffer, file.type);
           compressed = result.outputBuffer;
           outputMime = 'image/jpeg';
+          smartContentType = result.contentType;
+          smartChroma = result.settings.chromaSubsampling;
+          smartQuality = result.settings.jpegQuality;
+          smartSharpened = result.settings.sharpenBeforeCompress;
           console.log(
             `[smart] ${result.contentType} ` +
             `q=${result.settings.jpegQuality} ` +
@@ -140,14 +148,19 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      return new NextResponse(new Uint8Array(compressed), {
-        headers: {
-          'Content-Type': outputMime,
-          'X-Original-Size': String(buffer.length),
-          'X-Compressed-Size': String(compressed.length),
-          'X-Already-Optimized': 'false',
-        },
-      });
+      const responseHeaders: Record<string, string> = {
+        'Content-Type': outputMime,
+        'X-Original-Size': String(buffer.length),
+        'X-Compressed-Size': String(compressed.length),
+        'X-Already-Optimized': 'false',
+      };
+      if (smartContentType) {
+        responseHeaders['X-Smart-Content-Type'] = smartContentType;
+        responseHeaders['X-Smart-Chroma'] = smartChroma!;
+        responseHeaders['X-Smart-Quality'] = String(smartQuality!);
+        responseHeaders['X-Smart-Sharpened'] = String(smartSharpened!);
+      }
+      return new NextResponse(new Uint8Array(compressed), { headers: responseHeaders });
     }
 
     // ── VIDEO: async FFmpeg job — returns 202 immediately ──────────────────

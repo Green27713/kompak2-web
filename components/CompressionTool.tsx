@@ -3,6 +3,18 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { compressImage } from '../src/services/compression/compressImage';
 import { getFileCategory } from '../src/services/compression/index';
+import ComparisonSlider from './ComparisonSlider';
+import type { ComparisonSmartSettings } from './ComparisonSlider';
+
+interface ComparisonData {
+  originalUrl: string;
+  compressedUrl: string;
+  originalSize: number;
+  compressedSize: number;
+  mimeType: string;
+  smartContentType?: string;
+  smartSettings?: ComparisonSmartSettings;
+}
 
 const MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const CHUNK_SIZE = 5 * 1024 * 1024;
@@ -59,6 +71,17 @@ async function normalizeHEIC(f: File): Promise<File> {
   }
 }
 
+type UploadResult = {
+  blob: Blob;
+  origSize: number;
+  compSize: number;
+  alreadyOptimized: boolean;
+  smartContentType?: string;
+  smartChroma?: string;
+  smartQuality?: number;
+  smartSharpened?: boolean;
+};
+
 async function chunkedVideoUpload(
   file: File,
   quality: number,
@@ -67,7 +90,7 @@ async function chunkedVideoUpload(
   onProgress: (pct: number) => void,
   onUploadComplete: () => void,
   onCompressProgress: (pct: number) => void,
-): Promise<{ blob: Blob; origSize: number; compSize: number; alreadyOptimized: boolean }> {
+): Promise<UploadResult> {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   const uploadId = crypto.randomUUID();
 
@@ -145,6 +168,10 @@ async function chunkedVideoUpload(
         origSize: parseInt(downloadRes.headers.get('X-Original-Size') || '0'),
         compSize: parseInt(downloadRes.headers.get('X-Compressed-Size') || '0'),
         alreadyOptimized,
+        smartContentType: downloadRes.headers.get('X-Smart-Content-Type') ?? undefined,
+        smartChroma: downloadRes.headers.get('X-Smart-Chroma') ?? undefined,
+        smartQuality: parseInt(downloadRes.headers.get('X-Smart-Quality') || '0') || undefined,
+        smartSharpened: downloadRes.headers.get('X-Smart-Sharpened') === 'true',
       };
     }
 
@@ -157,7 +184,7 @@ function xhrUpload(
   signal: AbortSignal,
   onUploadProgress: (pct: number) => void,
   onUploadComplete?: () => void,
-): Promise<{ blob: Blob; origSize: number; compSize: number; alreadyOptimized: boolean }> {
+): Promise<UploadResult> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     signal.addEventListener('abort', () => xhr.abort());
@@ -177,6 +204,10 @@ function xhrUpload(
         origSize: parseInt(xhr.getResponseHeader('X-Original-Size') || '0'),
         compSize: parseInt(xhr.getResponseHeader('X-Compressed-Size') || '0'),
         alreadyOptimized: xhr.getResponseHeader('X-Already-Optimized') === 'true',
+        smartContentType: xhr.getResponseHeader('X-Smart-Content-Type') ?? undefined,
+        smartChroma: xhr.getResponseHeader('X-Smart-Chroma') ?? undefined,
+        smartQuality: parseInt(xhr.getResponseHeader('X-Smart-Quality') || '0') || undefined,
+        smartSharpened: xhr.getResponseHeader('X-Smart-Sharpened') === 'true',
       });
     });
     xhr.addEventListener('error', () => reject(new Error('Network error. Check your connection and try again.')));
@@ -257,6 +288,7 @@ export default function CompressionTool() {
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [compressProgress, setCompressProgress] = useState(0);
   const [alreadyOptimized, setAlreadyOptimized] = useState(false);
+  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -269,6 +301,8 @@ export default function CompressionTool() {
       return;
     }
     if (outputUrl) URL.revokeObjectURL(outputUrl);
+    if (comparisonData?.originalUrl) URL.revokeObjectURL(comparisonData.originalUrl);
+    setComparisonData(null);
     setError(null); setUploadPct(0); setOutputUrl(null);
 
     if (isHEICFile(raw)) {
@@ -316,7 +350,7 @@ export default function CompressionTool() {
         const useChunked = isVideo; // all videos use async chunked path
         const qualityVal = mode === 'convert' ? 100 : quality;
 
-        const { blob, origSize, compSize, alreadyOptimized: wasOptimized } = useChunked
+        const serverResult = useChunked
           ? await chunkedVideoUpload(file, qualityVal, videoFmt, controller.signal, onUploadProgress, onUploadComplete, (p) => setCompressProgress(p))
           : await xhrUpload(
               (() => {
@@ -330,23 +364,52 @@ export default function CompressionTool() {
               controller.signal, onUploadProgress, onUploadComplete
             );
 
+        const { blob, origSize, compSize, alreadyOptimized: wasOptimized,
+          smartContentType, smartChroma, smartQuality, smartSharpened } = serverResult;
+
         setPhase('process'); setUploadPct(90);
         if (wasOptimized) setAlreadyOptimized(true);
         const ext = isVideo ? videoFmt : imageFmt;
         const prefix = mode === 'convert' ? 'converted' : 'compressed';
-        setOutputUrl(URL.createObjectURL(blob));
+        const compBlobUrl = URL.createObjectURL(blob);
+        setOutputUrl(compBlobUrl);
         setOutputFilename(`${prefix}-${file.name.replace(/\.[^.]+$/, '')}.${ext}`);
-        setOriginalSize(origSize || file.size);
-        setCompressedSize(compSize || blob.size);
+        const oSize = origSize || file.size;
+        const cSize = compSize || blob.size;
+        setOriginalSize(oSize);
+        setCompressedSize(cSize);
+        if (!wasOptimized) {
+          setComparisonData({
+            originalUrl: URL.createObjectURL(file),
+            compressedUrl: compBlobUrl,
+            originalSize: oSize,
+            compressedSize: cSize,
+            mimeType: file.type,
+            smartContentType,
+            smartSettings: smartContentType ? {
+              jpegQuality: smartQuality ?? 80,
+              chromaSubsampling: smartChroma ?? '4:2:0',
+              sharpenBeforeCompress: !!smartSharpened,
+            } : undefined,
+          });
+        }
       } else {
         // Compress mode + image: use compressImage (has browser fallback)
         const result = await compressImage(file, { quality });
         const res = await fetch(result.dataUrl);
         const blob = await res.blob();
         const ext = blob.type.includes('webp') ? 'webp' : blob.type.includes('png') ? 'png' : 'jpg';
-        setOutputUrl(URL.createObjectURL(blob));
+        const compBlobUrl = URL.createObjectURL(blob);
+        setOutputUrl(compBlobUrl);
         setOutputFilename(`compressed-${file.name.replace(/\.[^.]+$/, '')}.${ext}`);
         setOriginalSize(file.size); setCompressedSize(result.sizeBytes);
+        setComparisonData({
+          originalUrl: URL.createObjectURL(file),
+          compressedUrl: compBlobUrl,
+          originalSize: file.size,
+          compressedSize: result.sizeBytes,
+          mimeType: file.type,
+        });
         setUploadPct(100);
       }
       setUploadPct(100); setStatus('completed');
@@ -369,11 +432,14 @@ export default function CompressionTool() {
   const handleReset = useCallback(() => {
     abortRef.current?.abort();
     if (outputUrl) URL.revokeObjectURL(outputUrl);
+    if (comparisonData?.originalUrl) URL.revokeObjectURL(comparisonData.originalUrl);
+    setComparisonData(null);
     setFile(null); setStatus('idle'); setUploadPct(0); setError(null); setOutputUrl(null); setCompressProgress(0); setAlreadyOptimized(false);
-  }, [outputUrl]);
+  }, [outputUrl, comparisonData]);
 
   const isVideo = file?.type.startsWith('video/');
   const savings = originalSize > 0 ? Math.max(0, Math.round((1 - compressedSize / originalSize) * 100)) : 0;
+  const savingsFloat = originalSize > 0 ? Math.max(0, (1 - compressedSize / originalSize) * 100) : 0;
   const isProcessing = status === 'processing';
 
   const fmtElapsed = (s: number) => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -531,26 +597,21 @@ export default function CompressionTool() {
         </div>
       )}
 
-      {/* Success */}
-      {status === 'completed' && (
+      {/* Success — already optimized */}
+      {status === 'completed' && alreadyOptimized && (
         <div style={{ backgroundColor: C.green50, border: `1px solid ${C.green200}`, borderRadius: 16, padding: 28, textAlign: 'center' }}>
-          <p style={{ fontSize: 20, fontWeight: 700, color: C.green800, margin: '0 0 16px' }}>
-            {alreadyOptimized ? '✅ Already Optimized' : mode === 'convert' ? '🔄 Conversion Complete!' : '✅ Compression Complete!'}
+          <p style={{ fontSize: 20, fontWeight: 700, color: C.green800, margin: '0 0 8px' }}>✅ Already Optimized</p>
+          <p style={{ margin: '0 0 20px', fontSize: 13, color: C.gray500 }}>
+            This file is already highly compressed. Returning the original to avoid increasing the size.
           </p>
-          {alreadyOptimized && (
-            <p style={{ margin: '-8px 0 16px', fontSize: 13, color: C.gray500 }}>
-              This file is already highly compressed. Returning the original to avoid increasing the size.
-            </p>
-          )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
             {[
               ['Original', formatSize(originalSize)],
-              [mode === 'convert' ? 'Converted' : 'Compressed', formatSize(compressedSize)],
-              [mode === 'convert' ? 'Size change' : 'Saved', savings > 0 ? `−${savings}%` : savings === 0 ? '0%' : `+${Math.abs(savings)}%`],
-            ].map(([label, val], i) => (
+              ['File size', formatSize(compressedSize)],
+            ].map(([label, val]) => (
               <div key={label}>
                 <p style={{ margin: '0 0 4px', fontSize: 12, color: C.gray500 }}>{label}</p>
-                <p style={{ margin: 0, fontSize: i === 2 ? 20 : 14, fontWeight: i === 2 ? 700 : 600, color: i === 2 && savings > 0 ? C.green : C.gray900 }}>{val}</p>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.gray900 }}>{val}</p>
               </div>
             ))}
           </div>
@@ -563,6 +624,36 @@ export default function CompressionTool() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Success — comparison slider */}
+      {status === 'completed' && !alreadyOptimized && comparisonData && (
+        <>
+          <ComparisonSlider
+            originalUrl={comparisonData.originalUrl}
+            compressedUrl={comparisonData.compressedUrl}
+            originalSize={comparisonData.originalSize}
+            compressedSize={comparisonData.compressedSize}
+            savingsPercent={savingsFloat}
+            mimeType={comparisonData.mimeType}
+            contentType={comparisonData.smartContentType}
+            settings={comparisonData.smartSettings}
+          />
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+            <button
+              onClick={handleDownload}
+              style={{ backgroundColor: C.green, color: C.white, border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }}
+            >
+              ⬇ Download {outputFilename.split('.').pop()?.toUpperCase()}
+            </button>
+            <button
+              onClick={handleReset}
+              style={{ backgroundColor: C.white, color: C.gray700, border: `1px solid ${C.gray200}`, borderRadius: 50, padding: '12px 22px', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}
+            >
+              {mode === 'convert' ? 'Convert Another' : 'Compress Another'}
+            </button>
+          </div>
+        </>
       )}
 
       {/* Error */}
