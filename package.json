@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "stripe:setup": "node scripts/create-stripe-product.mjs"
+    "stripe:setup": "node scripts/create-stripe-product.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -48,6 +49,7 @@
     "eslint-config-next": "16.2.6",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.8"
   }
 }

@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { applyRateLimit } from '@/lib/rateLimit';
 import { requireVideoSizeAllowed, VIDEO_SIZE_LIMITS } from '@/lib/requirePro';
 import { getTier } from '@/lib/rateLimit';
+import { smartCompress } from '@/lib/smartCompress';
 
 const execAsync = promisify(exec);
 
@@ -84,7 +85,32 @@ export async function POST(req: NextRequest) {
       let compressed: Buffer;
       let outputMime: string;
 
-      if (outputImageFormat === 'jpg') {
+      // Smart pipeline: analyse image content, pick per-image settings.
+      // Only activates for JPEG output (where the per-content settings apply)
+      // and when the user hasn't requested lossless (quality=100).
+      const wantJpeg =
+        outputImageFormat === 'jpg' ||
+        (outputImageFormat === 'auto' &&
+          (file.type === 'image/jpeg' || file.type === 'image/jpg'));
+
+      if (process.env.SMART_COMPRESS === 'true' && wantJpeg && !lossless) {
+        try {
+          const result = await smartCompress(buffer, file.type);
+          compressed = result.outputBuffer;
+          outputMime = 'image/jpeg';
+          console.log(
+            `[smart] ${result.contentType} ` +
+            `q=${result.settings.jpegQuality} ` +
+            `chroma=${result.settings.chromaSubsampling} ` +
+            `saved=${result.savingsPercent.toFixed(1)}%`,
+          );
+        } catch (smartErr) {
+          // Degrade gracefully — fall through to the standard JPEG path
+          console.warn('[smart] analysis failed, using standard pipeline:', smartErr);
+          compressed = await sharp(buffer).jpeg({ quality, mozjpeg: true }).toBuffer();
+          outputMime = 'image/jpeg';
+        }
+      } else if (outputImageFormat === 'jpg') {
         compressed = await sharp(buffer).jpeg({ quality, mozjpeg: !lossless }).toBuffer();
         outputMime = 'image/jpeg';
       } else if (outputImageFormat === 'png') {
