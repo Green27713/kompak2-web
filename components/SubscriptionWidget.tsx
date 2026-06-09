@@ -94,7 +94,7 @@ export default function SubscriptionWidget({ tier, email }: Props) {
   };
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 24px 32px' }}>
+    <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 24px 24px', position: 'relative', zIndex: 1 }}>
 
       {/* Toast */}
       {toast && (
@@ -123,8 +123,10 @@ export default function SubscriptionWidget({ tier, email }: Props) {
       {/* Card */}
       {tier === 'free' ? (
         <div style={{
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E5E7EB',
+          background: 'rgba(255,255,255,0.05)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: 14,
           padding: '20px 22px',
           display: 'flex',
@@ -135,12 +137,12 @@ export default function SubscriptionWidget({ tier, email }: Props) {
         }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Free Plan</span>
-              <span style={{ fontSize: 11, backgroundColor: '#F3F4F6', color: '#6B7280', padding: '1px 7px', borderRadius: 4, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#F8FAFC' }}>Free Plan</span>
+              <span style={{ fontSize: 11, backgroundColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', padding: '1px 7px', borderRadius: 4, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                 Current
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>{TIER_LIMITS.free}</p>
+            <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{TIER_LIMITS.free}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
@@ -148,16 +150,17 @@ export default function SubscriptionWidget({ tier, email }: Props) {
               disabled={loading === 'checkout'}
               style={{
                 padding: '9px 18px',
-                backgroundColor: loading === 'checkout' ? '#93C5FD' : '#2563EB',
+                background: loading === 'checkout' ? 'rgba(8,145,178,0.4)' : 'linear-gradient(135deg, #0891b2, #6d28d9)',
                 color: '#FFFFFF',
                 border: 'none',
                 borderRadius: 8,
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: loading === 'checkout' ? 'not-allowed' : 'pointer',
-                fontFamily: 'system-ui, sans-serif',
+                fontFamily: 'inherit',
                 whiteSpace: 'nowrap',
-                transition: 'background-color 0.15s',
+                opacity: loading === 'checkout' ? 0.7 : 1,
+                transition: 'opacity 0.15s',
               }}
             >
               {loading === 'checkout' ? 'Loading…' : 'Upgrade to Pro →'}
@@ -166,8 +169,10 @@ export default function SubscriptionWidget({ tier, email }: Props) {
         </div>
       ) : (
         <div style={{
-          backgroundColor: tier === 'enterprise' ? '#0F172A' : '#EFF6FF',
-          border: `1px solid ${tier === 'enterprise' ? '#1E293B' : '#BFDBFE'}`,
+          background: tier === 'enterprise' ? 'rgba(109,28,217,0.12)' : 'rgba(8,145,178,0.1)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: `1px solid ${tier === 'enterprise' ? 'rgba(167,139,250,0.25)' : 'rgba(34,211,238,0.25)'}`,
           borderRadius: 14,
           padding: '20px 22px',
           display: 'flex',
@@ -178,13 +183,13 @@ export default function SubscriptionWidget({ tier, email }: Props) {
         }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: tier === 'enterprise' ? '#F1F5F9' : '#1D4ED8' }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#F8FAFC' }}>
                 {TIER_LABELS[tier]} Plan
               </span>
               <span style={{
                 fontSize: 11,
-                backgroundColor: tier === 'enterprise' ? '#1E40AF' : '#2563EB',
-                color: '#BFDBFE',
+                backgroundColor: tier === 'enterprise' ? 'rgba(109,28,217,0.4)' : 'rgba(8,145,178,0.35)',
+                color: tier === 'enterprise' ? '#c4b5fd' : '#67e8f9',
                 padding: '1px 7px',
                 borderRadius: 4,
                 fontWeight: 700,
@@ -194,9 +199,9 @@ export default function SubscriptionWidget({ tier, email }: Props) {
                 {tier === 'enterprise' ? 'Enterprise' : 'Pro'}
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: 12, color: tier === 'enterprise' ? '#94A3B8' : '#3B82F6' }}>
+            <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
               {TIER_LIMITS[tier]}
-              {email && <span style={{ marginLeft: 8, color: tier === 'enterprise' ? '#64748B' : '#93C5FD' }}>· {email}</span>}
+              {email && <span style={{ marginLeft: 8, color: 'rgba(255,255,255,0.3)' }}>· {email}</span>}
             </p>
           </div>
           <button
@@ -205,13 +210,13 @@ export default function SubscriptionWidget({ tier, email }: Props) {
             style={{
               padding: '9px 18px',
               backgroundColor: 'transparent',
-              color: tier === 'enterprise' ? '#CBD5E1' : '#1D4ED8',
-              border: `1.5px solid ${tier === 'enterprise' ? '#334155' : '#BFDBFE'}`,
+              color: tier === 'enterprise' ? '#c4b5fd' : '#67e8f9',
+              border: `1.5px solid ${tier === 'enterprise' ? 'rgba(167,139,250,0.3)' : 'rgba(34,211,238,0.3)'}`,
               borderRadius: 8,
               fontSize: 13,
               fontWeight: 600,
               cursor: loading === 'portal' ? 'not-allowed' : 'pointer',
-              fontFamily: 'system-ui, sans-serif',
+              fontFamily: 'inherit',
               whiteSpace: 'nowrap',
               opacity: loading === 'portal' ? 0.6 : 1,
               transition: 'opacity 0.15s',
@@ -224,11 +229,8 @@ export default function SubscriptionWidget({ tier, email }: Props) {
 
       {/* Upsell teaser for free users */}
       {tier === 'free' && (
-        <p style={{ margin: '10px 0 0', textAlign: 'center', fontSize: 12, color: '#9CA3AF' }}>
-          Pro: 2 GB videos · 100 req/min · $9/mo &nbsp;·&nbsp;{' '}
-          <a href="/enterprise" style={{ color: '#9CA3AF', textDecoration: 'underline' }}>
-            Enterprise →
-          </a>
+        <p style={{ margin: '10px 0 0', textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+          Pro: 2 GB videos · 100 req/min · $9/mo
         </p>
       )}
     </div>

@@ -21,12 +21,25 @@ const CHUNK_SIZE = 5 * 1024 * 1024;
 const CHUNKED_THRESHOLD = 50 * 1024 * 1024;
 
 const C = {
+  // Core blues kept for buttons and accents
   blue: '#2563EB', blueDark: '#1D4ED8', blue50: '#EFF6FF', blue100: '#DBEAFE', blue200: '#BFDBFE',
-  gray50: '#F9FAFB', gray100: '#F3F4F6', gray200: '#E5E7EB', gray300: '#D1D5DB',
-  gray400: '#9CA3AF', gray500: '#6B7280', gray700: '#374151', gray900: '#111827',
+  // Greens and reds kept as-is (success/error feedback is intentionally vivid)
   green: '#16A34A', green50: '#F0FDF4', green200: '#BBF7D0', green800: '#166534',
   red: '#DC2626', red50: '#FEF2F2', red200: '#FECACA',
-  white: '#FFFFFF',
+  // Dark-glass theme palette
+  white: 'rgba(255,255,255,0.06)',   // glass card background
+  gray50: 'rgba(255,255,255,0.03)',  // drop zone background
+  gray100: 'rgba(0,0,0,0.35)',       // mode toggle track
+  gray200: 'rgba(255,255,255,0.1)',  // borders
+  gray300: 'rgba(255,255,255,0.12)', // dashed drop border
+  gray400: 'rgba(255,255,255,0.3)',  // muted icons/text
+  gray500: 'rgba(255,255,255,0.45)', // secondary text
+  gray700: 'rgba(255,255,255,0.7)',  // primary labels
+  gray900: '#F8FAFC',                // high-contrast text
+  // Cyan accent
+  cyan: '#22d3ee',
+  cyanDim: 'rgba(34,211,238,0.15)',
+  cyanBorder: 'rgba(34,211,238,0.45)',
 };
 
 type Mode = 'compress' | 'convert';
@@ -226,10 +239,10 @@ function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => voi
           onClick={() => onChange(m)}
           style={{
             flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
-            fontSize: 14, fontWeight: 600, transition: 'all 0.15s',
-            backgroundColor: mode === m ? C.white : 'transparent',
-            color: mode === m ? C.blue : C.gray500,
-            boxShadow: mode === m ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+            fontSize: 14, fontWeight: 600, transition: 'all 0.15s', fontFamily: 'inherit',
+            backgroundColor: mode === m ? 'rgba(255,255,255,0.1)' : 'transparent',
+            color: mode === m ? '#F8FAFC' : C.gray500,
+            boxShadow: mode === m ? '0 1px 8px rgba(0,0,0,0.25)' : 'none',
           }}
         >
           {m === 'compress' ? '🗜 Compress' : '🔄 Convert'}
@@ -253,9 +266,10 @@ function FmtPills<T extends string>({ options, value, onChange }: {
             onClick={() => onChange(o.value)}
             style={{
               flex: 1, padding: '10px 0', borderRadius: 10, cursor: 'pointer', fontSize: 13,
-              border: `2px solid ${value === o.value ? C.blue : C.gray200}`,
-              backgroundColor: value === o.value ? C.blue50 : C.white,
-              color: value === o.value ? C.blue : C.gray700,
+              fontFamily: 'inherit',
+              border: `2px solid ${value === o.value ? C.cyanBorder : C.gray200}`,
+              backgroundColor: value === o.value ? C.cyanDim : 'transparent',
+              color: value === o.value ? C.cyan : C.gray500,
               fontWeight: value === o.value ? 600 : 400,
             }}
           >
@@ -464,7 +478,7 @@ export default function CompressionTool() {
   ];
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 24px 48px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ maxWidth: 600, margin: '0 auto', padding: '28px 28px 36px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Mode Toggle — always visible */}
       <ModeToggle mode={mode} onChange={m => { setMode(m); handleReset(); }} />
@@ -479,7 +493,7 @@ export default function CompressionTool() {
       {/* Drop Zone */}
       {!file && status !== 'converting' && (
         <div
-          style={{ border: `2px dashed ${dragging ? C.blue : C.gray300}`, borderRadius: 16, padding: '48px 40px', textAlign: 'center', cursor: 'pointer', backgroundColor: dragging ? C.blue50 : C.gray50, transition: 'all 0.2s' }}
+          style={{ border: `2px dashed ${dragging ? C.cyan : C.gray300}`, borderRadius: 16, padding: '48px 40px', textAlign: 'center', cursor: 'pointer', backgroundColor: dragging ? 'rgba(8,145,178,0.08)' : C.gray50, transition: 'all 0.2s' }}
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
@@ -487,8 +501,8 @@ export default function CompressionTool() {
         >
           <input type="file" id="ct-upload" style={{ display: 'none' }} onChange={onInputChange}
             accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm" />
-          <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: C.blue100, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: C.cyanDim, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.cyan} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
               <line x1="12" y1="3" x2="12" y2="15"/>
@@ -498,14 +512,14 @@ export default function CompressionTool() {
             {dragging ? `Release to ${mode}` : `Drop your file here or click to browse`}
           </p>
           <p style={{ fontSize: 13, color: C.gray500, margin: 0 }}>
-            JPEG · PNG · WebP · <strong>HEIC</strong> · MP4 · MOV · WebM · max 2 GB
+            JPEG · PNG · WebP · <strong style={{ color: C.gray700 }}>HEIC</strong> · MP4 · MOV · WebM · max 2 GB
           </p>
         </div>
       )}
 
       {/* HEIC converting spinner */}
       {status === 'converting' && (
-        <div style={{ textAlign: 'center', padding: '48px 24px', backgroundColor: C.blue50, borderRadius: 16, border: `1px solid ${C.blue200}` }}>
+        <div style={{ textAlign: 'center', padding: '48px 24px', backgroundColor: C.cyanDim, borderRadius: 16, border: `1px solid ${C.cyanBorder}` }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>🔄</div>
           <p style={{ margin: '0 0 4px', fontWeight: 600, color: C.gray900 }}>Converting HEIC…</p>
           <p style={{ margin: 0, fontSize: 13, color: C.gray500 }}>Decoding to JPEG in your browser</p>
@@ -514,7 +528,7 @@ export default function CompressionTool() {
 
       {/* File Info */}
       {file && status !== 'converting' && (
-        <div style={{ backgroundColor: C.white, borderRadius: 12, padding: '14px 18px', border: `1px solid ${C.gray200}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        <div style={{ backgroundColor: C.white, borderRadius: 12, padding: '14px 18px', border: `1px solid ${C.gray200}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ overflow: 'hidden' }}>
             <p style={{ margin: '0 0 3px', fontWeight: 600, color: C.gray900, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 380 }}>{file.name}</p>
             <p style={{ margin: 0, fontSize: 12, color: C.gray500 }}>{formatSize(file.size)} · {isVideo ? 'Video' : 'Image'}</p>
@@ -537,8 +551,8 @@ export default function CompressionTool() {
 
       {/* Privacy badge — any server-side operation */}
       {file && status === 'idle' && (isVideo || mode === 'convert') && (
-        <div style={{ border: `1px solid ${C.blue200}`, borderRadius: 14, overflow: 'hidden' }}>
-          <div style={{ backgroundColor: C.blue, color: C.white, padding: '9px 16px', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ border: `1px solid ${C.cyanBorder}`, borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ backgroundColor: 'rgba(8,145,178,0.25)', color: '#67e8f9', padding: '9px 16px', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
             ⚡ Secure Server Processing · Files deleted immediately after
           </div>
         </div>
@@ -553,7 +567,7 @@ export default function CompressionTool() {
           </div>
           <input type="range" min={1} max={100} value={quality}
             onChange={e => setQuality(Number(e.target.value))}
-            style={{ width: '100%', accentColor: C.blue }} />
+            style={{ width: '100%', accentColor: C.cyan }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.gray400, marginTop: 4 }}>
             <span>Smaller file</span><span>Better quality</span>
           </div>
@@ -564,9 +578,9 @@ export default function CompressionTool() {
       {file && status === 'idle' && (
         <button
           onClick={handleAction}
-          style={{ width: '100%', backgroundColor: C.blue, color: C.white, border: 'none', borderRadius: 50, padding: '14px 0', fontSize: 15, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 14px rgba(37,99,235,0.35)', transition: 'background 0.15s' }}
-          onMouseEnter={e => (e.currentTarget.style.backgroundColor = C.blueDark)}
-          onMouseLeave={e => (e.currentTarget.style.backgroundColor = C.blue)}
+          style={{ width: '100%', background: 'linear-gradient(135deg, #0891b2, #6d28d9)', color: '#FFFFFF', border: 'none', borderRadius: 50, padding: '14px 0', fontSize: 15, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 20px rgba(8,145,178,0.35)', transition: 'opacity 0.15s', fontFamily: 'inherit' }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
         >
           {actionLabel}
         </button>
@@ -581,7 +595,8 @@ export default function CompressionTool() {
           </div>
           <div style={{ width: '100%', height: 8, backgroundColor: C.gray200, borderRadius: 999, overflow: 'hidden' }}>
             <div style={{
-              height: '100%', borderRadius: 999, backgroundColor: C.blue,
+              height: '100%', borderRadius: 999,
+              background: 'linear-gradient(90deg, #0891b2, #6d28d9)',
               width: phase === 'process' ? `${Math.max(5, compressProgress)}%` : (uploadPct > 0 ? `${uploadPct}%` : '5%'),
               transition: 'width 0.8s ease',
               animation: phase === 'process' && compressProgress < 95 ? 'pulse 1.5s cubic-bezier(.4,0,.6,1) infinite' : 'none',
@@ -619,7 +634,7 @@ export default function CompressionTool() {
             <button onClick={handleDownload} style={{ backgroundColor: C.green, color: C.white, border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }}>
               ⬇ Download {outputFilename.split('.').pop()?.toUpperCase()}
             </button>
-            <button onClick={handleReset} style={{ backgroundColor: C.white, color: C.gray700, border: `1px solid ${C.gray200}`, borderRadius: 50, padding: '12px 22px', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
+            <button onClick={handleReset} style={{ backgroundColor: 'transparent', color: C.gray700, border: `1px solid ${C.gray200}`, borderRadius: 50, padding: '12px 22px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
               {mode === 'convert' ? 'Convert Another' : 'Compress Another'}
             </button>
           </div>
