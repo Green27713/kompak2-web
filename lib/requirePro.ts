@@ -99,9 +99,9 @@ export async function requireEnterprise(req: NextRequest): Promise<NextResponse 
 // ─── Tier-based file size limits ─────────────────────────────────────────────
 // Single source of truth for video size gates — imported by compress route.
 export const VIDEO_SIZE_LIMITS: Record<SessionData['tier'], number> = {
-  free:       600  * 1024 * 1024,       //   600 MB
-  pro:        2    * 1024 * 1024 * 1024, //     2 GB
-  enterprise: 5    * 1024 * 1024 * 1024, //     5 GB
+  free:       600  * 1024 * 1024,         //  600 MB
+  pro:        2    * 1024 * 1024 * 1024,  //    2 GB
+  enterprise: 5    * 1024 * 1024 * 1024,  //    5 GB
 };
 
 /**

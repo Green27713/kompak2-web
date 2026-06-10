@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
         if (!email) { console.warn('[stripe/webhook] checkout.session has no email'); break; }
 
         await db.user.upsert({
-          where: { stripeCustomerId: cs.customer as string },
+          where: { email },
           create: {
             email,
             stripeCustomerId: cs.customer as string,
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
             subscriptionStatus: subscription.status,
           },
           update: {
-            email,
+            stripeCustomerId: cs.customer as string,
             stripeSubscriptionId: cs.subscription as string,
             subscriptionTier: tier,
             subscriptionStatus: subscription.status,

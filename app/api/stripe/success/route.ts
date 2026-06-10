@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     if (email && customerId) {
       // Upsert — the webhook may have already done this, which is fine.
       await db.user.upsert({
-        where: { stripeCustomerId: customerId },
+        where: { email },
         create: {
           email,
           stripeCustomerId: customerId,
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
           subscriptionStatus: sub?.status ?? 'active',
         },
         update: {
-          email,
+          stripeCustomerId: customerId,
           stripeSubscriptionId: sub?.id ?? null,
           subscriptionTier: resolvedTier,
           subscriptionStatus: sub?.status ?? 'active',
