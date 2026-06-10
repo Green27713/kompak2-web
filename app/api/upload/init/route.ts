@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   const { uploadId, filename, totalChunks } = await request.json();
 

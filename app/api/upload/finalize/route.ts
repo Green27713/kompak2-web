@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readFile, appendFile, unlink } from 'fs/promises';
 import { join } from 'path';
 
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   const { uploadId } = await request.json();
 

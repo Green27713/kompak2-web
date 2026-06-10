@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
 
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   const uploadId = request.headers.get('X-Upload-ID');
   const chunkIndex = request.headers.get('X-Chunk-Index');
