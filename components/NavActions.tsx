@@ -43,25 +43,33 @@ export default function NavActions({ tier, email }: { tier: Tier; email: string 
         ☕ Support
       </a>
       {tier === 'free' && (
-        <button
-          onClick={handleUpgrade}
-          disabled={loading}
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: '#FFFFFF',
-            background: 'linear-gradient(135deg, #0891b2, #6d28d9)',
-            border: 'none',
-            borderRadius: 20,
-            padding: '6px 16px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            opacity: loading ? 0.7 : 1,
-            whiteSpace: 'nowrap',
-            fontFamily: 'inherit',
-          }}
-        >
-          {loading ? 'Loading…' : 'Upgrade to Pro →'}
-        </button>
+        <>
+          <a
+            href="/login"
+            style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', whiteSpace: 'nowrap', padding: '5px 4px' }}
+          >
+            Sign in
+          </a>
+          <button
+            onClick={handleUpgrade}
+            disabled={loading}
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#FFFFFF',
+              background: 'linear-gradient(135deg, #0891b2, #6d28d9)',
+              border: 'none',
+              borderRadius: 20,
+              padding: '6px 16px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1,
+              whiteSpace: 'nowrap',
+              fontFamily: 'inherit',
+            }}
+          >
+            {loading ? 'Loading…' : 'Upgrade to Pro →'}
+          </button>
+        </>
       )}
       {tier !== 'free' && (
         <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', padding: '4px 10px', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 20 }}>
