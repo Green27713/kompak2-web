@@ -110,10 +110,13 @@ async function chunkedVideoUpload(
   const initRes = await fetch('/api/upload/init', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uploadId, filename: file.name, totalChunks }),
+    body: JSON.stringify({ uploadId, filename: file.name, totalChunks, fileSize: file.size }),
     signal,
   });
-  if (!initRes.ok) throw new Error('Failed to initialize upload');
+  if (!initRes.ok) {
+    const body = await initRes.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || 'Failed to initialize upload');
+  }
 
   for (let i = 0; i < totalChunks; i++) {
     if (signal.aborted) throw Object.assign(new Error('Cancelled'), { name: 'AbortError' });
