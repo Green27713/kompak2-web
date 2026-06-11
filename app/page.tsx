@@ -72,17 +72,43 @@ export default async function Home() {
       {/* Hero */}
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px 0', textAlign: 'center', position: 'relative', zIndex: 1 }}>
 
-        {/* Pill badge */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 7,
-          backgroundColor: 'rgba(8,145,178,0.1)',
-          border: '1px solid rgba(8,145,178,0.35)',
-          borderRadius: 20, padding: '5px 14px',
-          fontSize: 12, color: '#67e8f9', fontWeight: 500, marginBottom: 22,
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#22d3ee', flexShrink: 0, display: 'inline-block' }} />
-          Zero-retention · Files deleted instantly
-        </div>
+        {/* Pill badge — copy and colour vary by tier */}
+        {tier === 'free' && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            backgroundColor: 'rgba(8,145,178,0.1)',
+            border: '1px solid rgba(8,145,178,0.35)',
+            borderRadius: 20, padding: '5px 14px',
+            fontSize: 12, color: '#67e8f9', fontWeight: 500, marginBottom: 22,
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#22d3ee', flexShrink: 0, display: 'inline-block' }} />
+            Zero-retention · Files deleted instantly
+          </div>
+        )}
+        {tier === 'pro' && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            backgroundColor: 'rgba(34,197,94,0.1)',
+            border: '1px solid rgba(34,197,94,0.35)',
+            borderRadius: 20, padding: '5px 14px',
+            fontSize: 12, color: '#86efac', fontWeight: 500, marginBottom: 22,
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#22c55e', flexShrink: 0, display: 'inline-block' }} />
+            Zero-retention · 2 GB limit · Priority processing
+          </div>
+        )}
+        {tier === 'enterprise' && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            backgroundColor: 'rgba(167,139,250,0.1)',
+            border: '1px solid rgba(167,139,250,0.35)',
+            borderRadius: 20, padding: '5px 14px',
+            fontSize: 12, color: '#c4b5fd', fontWeight: 500, marginBottom: 22,
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#a78bfa', flexShrink: 0, display: 'inline-block' }} />
+            Zero-retention · 5 GB limit · Priority processing
+          </div>
+        )}
 
         <h1 style={{
           fontSize: 'clamp(2rem, 5.5vw, 3.5rem)',
@@ -95,7 +121,11 @@ export default async function Home() {
           Compress Images &amp; Videos
         </h1>
         <p style={{ fontSize: 16, color: '#94A3B8', margin: '0 0 36px', lineHeight: 1.65 }}>
-          Up to 2 GB. JPEG · PNG · HEIC · MP4 · WebM. Files deleted from server instantly.
+          {tier === 'enterprise'
+            ? 'Up to 5 GB. JPEG · PNG · HEIC · MP4 · WebM. Files deleted from server instantly.'
+            : tier === 'pro'
+            ? 'Up to 2 GB. JPEG · PNG · HEIC · MP4 · WebM. Files deleted from server instantly.'
+            : 'Up to 600 MB. JPEG · PNG · HEIC · MP4 · WebM. Files deleted from server instantly.'}
         </p>
       </div>
 

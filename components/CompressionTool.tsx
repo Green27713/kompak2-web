@@ -631,7 +631,7 @@ export default function CompressionTool() {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={handleDownload} style={{ backgroundColor: C.green, color: C.white, border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }}>
+            <button onClick={handleDownload} style={{ backgroundColor: C.green, color: '#FFFFFF', border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }}>
               ⬇ Download {outputFilename.split('.').pop()?.toUpperCase()}
             </button>
             <button onClick={handleReset} style={{ backgroundColor: 'transparent', color: C.gray700, border: `1px solid ${C.gray200}`, borderRadius: 50, padding: '12px 22px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -657,7 +657,7 @@ export default function CompressionTool() {
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 4, flexWrap: 'wrap' }}>
             <button
               onClick={handleDownload}
-              style={{ backgroundColor: C.green, color: C.white, border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }}
+              style={{ backgroundColor: C.green, color: '#FFFFFF', border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }}
             >
               ⬇ Download {outputFilename.split('.').pop()?.toUpperCase()}
             </button>
